@@ -30,8 +30,13 @@ import { isGreetingOnly } from '../src/services/greetings.js';
  */
 
 // --- the ratchet ---------------------------------------------------------------------------------------------
-/** Pinned on 2026-10-03 (claude/briefuzz on release 3, b7541da6). Lower these when a fix lands; never raise them. */
-const BASELINE = { total: 490, I1: 0, I2: 232, I3: 185, I4: 32, I5: 41 };
+/**
+ * Pinned on 2026-10-03 (claude/briefuzz on release 3, b7541da6). Lower these when a fix lands; never raise them.
+ * Lowered on 2026-10-03 (claude/intentfix, ADR-284 addendum: intent, routing and title classes): total 490 → 324,
+ * I3 185 → 70, I4 32 → 2, I5 41 → 0. I2 is held at 232: that change alone measures 252 (briefs that now draft hit
+ * the copy-extraction classes), and the copy-extraction fix brings it under.
+ */
+const BASELINE = { total: 324, I1: 0, I2: 232, I3: 70, I4: 2, I5: 0 };
 
 // --- deterministic generation --------------------------------------------------------------------------------
 const SEED = 20261003;
