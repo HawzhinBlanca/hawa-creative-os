@@ -4,7 +4,9 @@ import {CanvaConnectService} from '../src/services/canva-connect-service.js';
 import {customerActionEvent,projectCustomerAction,acknowledgeCustomerAction} from '../src/customer/customer-actions.js';
 import { customerPhotoSelection } from '@hawa/creative';
 import { DesignStudioService } from '../src/services/design-studio/design-studio-service.js';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { blobStoreFor } from '../src/services/blob-store-context.js';
@@ -584,6 +586,17 @@ it('retains an uppercase UUID submission body while resolving its canonical sele
 });
 
 const photoJpeg=readFileSync(new URL('./fixtures/telegram-photo-1280.jpg',import.meta.url));
+// A small PNG decoded from the JPEG fixture. ffmpeg reads the fixture from a file, never stdin: fed through
+// execFileSync's stdin it sometimes idled on an open pipe under the full suite's load, hanging the
+// release gate for two hours (2026-10-03); the timeout turns any other stall into a failure in seconds.
+const fixturePng=(filters:string)=>{
+ const dir=mkdtempSync(join(tmpdir(),'hawa-photo-'));
+ try {
+  const input=join(dir,'photo.jpg');writeFileSync(input,photoJpeg);
+  return execFileSync('ffmpeg',['-v','error','-nostdin','-i',input,'-vf',filters,'-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],
+   {maxBuffer:65536,timeout:30000,killSignal:'SIGKILL',stdio:['ignore','pipe','pipe']});
+ } finally {rmSync(dir,{recursive:true,force:true});}
+};
 const photoHash=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
 async function previewFixture(override?:Partial<CustomerDesignRequest>) {
  const f=await fixture();Object.assign(f.body,override);
@@ -593,7 +606,7 @@ async function previewFixture(override?:Partial<CustomerDesignRequest>) {
  const binding=randomUUID(),designId='Synthetic-'+randomUUID();
  await sql`INSERT INTO hawa.canva_bindings(id,tenant_id,task_id,client_id,canva_design_id,edit_url)
  VALUES(${binding}::uuid,${f.tenantId}::uuid,${projection.taskId}::uuid,${f.clientId}::uuid,${designId},'https://www.canva.com/design/synthetic/edit')`.execute(owner);
- const png=execFileSync('ffmpeg',['-v','error','-f','image2pipe','-i','pipe:0','-vf','scale=32:32','-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],{input:photoJpeg,maxBuffer:65536});
+ const png=fixturePng('scale=32:32');
  async function capture(bytes=png,format='png',native='v1',check?:Record<string,unknown>) {
   const operation=randomUUID(),id=randomUUID(),hash=photoHash(bytes);
   await sql`INSERT INTO hawa.canva_remote_operations(id,tenant_id,task_id,client_id,actor_id,request_key,request_hash,kind,status,design_id,binding_version,metadata)
@@ -701,8 +714,7 @@ it('bounds complete concurrent preview reads before retaining or decoding native
  expect((await app.request(url)).status).toBe(404);
 });
 async function upload(f:Awaited<ReturnType<typeof fixture>>,n=0,member=f.a.member) {
-  const bytes=execFileSync('ffmpeg',['-v','error','-f','image2pipe','-i','pipe:0','-vf',`scale=32:32,hue=h=${n*37}`,
-    '-frames:v','1','-threads','1','-c:v','png','-f','image2pipe','pipe:1'],{input:photoJpeg,maxBuffer:65536});
+  const bytes=fixturePng(`scale=32:32,hue=h=${n*37}`);
   return f.service.uploadPhoto(member,f.clientId,'photo_key_'+n,`photo${n}.png`,'image/png',bytes,photoHash(bytes));
 }
 it('decodes actual JPEG/PNG/WebP originals and refuses malformed headers, hash mismatch, traversal and pixel bombs',async()=>{
