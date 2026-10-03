@@ -1,0 +1,318 @@
+{
+  "date": "2026-10-03",
+  "status": "LOCAL_NATIVE_BROWSER_INTAKE_QUALIFIED_FULL_CUSTOMER_WORKER_CANVA_OPEN",
+  "adr": 278,
+  "requirements": [
+    "FR-001",
+    "FR-006",
+    "FR-017",
+    "FR-068",
+    "FR-069",
+    "NFR-006",
+    "NFR-012",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "sourceCandidate": "b93a40fc697b1b9d0012dc425ae0d6e716583765",
+  "websiteProof": {
+    "path": "/Users/hawzhin/Hawdesign/.worktrees/hawzhin-app-integration/docs/NATIVE_INTAKE_PROOF.json",
+    "sha256": "cfa8b09a0d1b94a5e784fdfd4a34e8b5b49dea405bb05c14475920e6962d887e"
+  },
+  "qualification": {
+    "browser": {
+      "date": "2026-10-03T10:05:01.257Z",
+      "passed": 9,
+      "failed": 0,
+      "checks": [
+        {
+          "name": "unsigned production browser is redirected from Designer to the shared login",
+          "pass": true
+        },
+        {
+          "name": "actual website password form obtains a native Auth session and reaches assigned Core brand",
+          "pass": true
+        },
+        {
+          "name": "actual browser form commits a customer request and displays its durable server receipt",
+          "pass": true
+        },
+        {
+          "name": "actual browser repeats its original body and idempotency key without creating another request",
+          "pass": true
+        },
+        {
+          "name": "page reload restores the native shared session and persisted owned receipt without another password login",
+          "pass": true
+        },
+        {
+          "name": "native sign-out removes Designer access and the previous member view",
+          "pass": true
+        },
+        {
+          "name": "second actual member in the same browser sees only its own brand and no first-member receipt",
+          "pass": true
+        },
+        {
+          "name": "second browser session cannot fetch the first receipt by exact identifier through actual Core",
+          "pass": true
+        },
+        {
+          "name": "private intake browser uses explicit startup capability and retains native transport",
+          "pass": true
+        }
+      ],
+      "traffic": {
+        "authPassword": 2,
+        "authRefresh": 0,
+        "accessRpc": 16,
+        "coreSession": 8,
+        "coreJobs": 14,
+        "actualForwarded": 113,
+        "forwardingFailures": 0,
+        "blockedConnect": 10
+      },
+      "actual": [
+        "production website bundle and shared password form",
+        "vendor Auth and access RPC",
+        "production Core HTTP",
+        "restricted independent Hawa PostgreSQL",
+        "same-browser two-user session and receipt isolation"
+      ],
+      "notQualified": [
+        "hosted DNS/trusted TLS",
+        "public generation or photo upload",
+        "worker pipeline",
+        "Canva editing/export",
+        "native languages/fonts",
+        "human design quality",
+        "production deployment/restore"
+      ],
+      "responseInterception": false,
+      "browserProfilesReused": false,
+      "productionConfigurationImported": false,
+      "vendorConfiguredBootstrapBindings": "retained but no active mappings on the verified internal-only network",
+      "serviceWorkers": "blocked; actual PWA behavior not qualified",
+      "generationEnabled": true,
+      "privateBrowserIntake": true,
+      "notRerun": [
+        "native expiry/refresh control retained from the identity lane; not run for focused intake"
+      ],
+      "ownedGatewayAndBrowserRemoved": true,
+      "temporaryBuildAndCertificateRemoved": true
+    },
+    "nativeCore": {
+      "passed": 22,
+      "failed": 0,
+      "checks": [
+        {
+          "name": "fresh independent engine schema applies all current native versioned upgrades",
+          "pass": true
+        },
+        {
+          "name": "Core database role cannot bypass RLS and is distinct from migration owner",
+          "pass": true
+        },
+        {
+          "name": "real Auth signs five distinct fixture users and real access RPC approves only chosen members",
+          "pass": true
+        },
+        {
+          "name": "named Hawa administrator grants separate brands through restricted runtime provisioning",
+          "pass": true
+        },
+        {
+          "name": "production Core HTTP session uses actual Auth/RPC and returns only first member brand",
+          "pass": true
+        },
+        {
+          "name": "second real member has a distinct account and its own brand only",
+          "pass": true
+        },
+        {
+          "name": "signed pending member denied by actual workspace access RPC",
+          "pass": true
+        },
+        {
+          "name": "workspace approval alone never grants a Hawa customer account",
+          "pass": true
+        },
+        {
+          "name": "missing token refused without calling external authentication",
+          "pass": true
+        },
+        {
+          "name": "office operator key cannot authenticate as a website member",
+          "pass": true
+        },
+        {
+          "name": "tampered actual JWT rejected by native Auth",
+          "pass": true
+        },
+        {
+          "name": "foreign browser origin refused before Auth and gets no customer CORS allowance",
+          "pass": true
+        },
+        {
+          "name": "customer JWT cannot access office clients or customer administration",
+          "pass": true
+        },
+        {
+          "name": "production factory keeps generation and public uploads off without explicit startup opt-in",
+          "pass": true
+        },
+        {
+          "name": "canonical repository fixture receipt is idempotent and retains exact live copy, not a generated design",
+          "pass": true
+        },
+        {
+          "name": "Core lists the fixture receipt for its actual owner and no other member",
+          "pass": true
+        },
+        {
+          "name": "second real user cannot read first user fixture request even with its exact identifier",
+          "pass": true
+        },
+        {
+          "name": "workspace revocation immediately denies a still-valid presented token",
+          "pass": true
+        },
+        {
+          "name": "Core account revocation independently denies an approved workspace JWT",
+          "pass": true
+        },
+        {
+          "name": "new Core instance reads persisted owner receipt and keeps generation gate closed",
+          "pass": true
+        },
+        {
+          "name": "actual browser HTTP intake stores exactly one owner receipt with exact declared Sorani copy and geometry",
+          "pass": true
+        },
+        {
+          "name": "actual browser replay retains one canonical outbox command and does not pretend worker generation completed",
+          "pass": true
+        }
+      ],
+      "actual": [
+        "vendor Auth-issued JWT",
+        "native access RPC",
+        "production createApp HTTP routing",
+        "restricted PostgreSQL role",
+        "current 89-migration engine schema",
+        "two-user request read isolation",
+        "independent current revocation"
+      ],
+      "notQualified": [
+        "hosted TLS/DNS",
+        "browser login and upload",
+        "public generation admission",
+        "worker design pipeline",
+        "Canva native editing/export",
+        "design quality",
+        "production restart/cutover"
+      ],
+      "transport": "test-only exact-origin Auth request projection to owned native Kong; no synthetic response",
+      "fixtureRequest": "baseline direct canonical repository receipt seeding; no generation or human approval",
+      "privateBrowserIntake": true,
+      "browserGenerationEnabled": true,
+      "authRequests": {
+        "user": 30,
+        "access": 29
+      }
+    },
+    "websiteMigrations": 126,
+    "engineUpgrades": 89,
+    "authJwtSeconds": 180,
+    "serviceQualificationInProvisionLane": false,
+    "engineContracts": {
+      "redPassed": 82,
+      "redFailed": 2,
+      "passed": 118,
+      "failed": 0,
+      "skipped": 0
+    },
+    "engineTypes": {
+      "strictRoots": 757,
+      "exitCode": 0
+    },
+    "engineSecurityEgressRatchet": "PASS;957<=1053; no new allowlist",
+    "browserScriptLint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "syntax": "Node and Python PASS"
+  },
+  "cleanup": {
+    "vendorContainersRemoved": 6,
+    "ownedNetworksRemoved": 2,
+    "privateInputsAndDiagnosticsRemoved": true,
+    "priorContainersUnchanged": 10,
+    "coreAndCreatedDatabaseRolesRemoved": true,
+    "browserGatewayBuildAndTlsRemoved": true
+  },
+  "retainedFailures": [
+    "82pass/2fail baseline: generation setting ignored and malformed startup switches silently accepted",
+    "System Python missing PyYAML refused manifest/commit; existing Homebrew Python validates without hook bypass"
+  ],
+  "retainedNotRerun": {
+    "nativeIdentityExpiryLane": {
+      "browserPassed": 8,
+      "failed": 0
+    },
+    "managedServiceChecks": 25,
+    "websiteUnits": 1109,
+    "modeledBrowserChecks": 51,
+    "engineFull": {
+      "passed": 8277,
+      "failed": 0,
+      "skipped": 67
+    }
+  },
+  "coverage": {
+    "status": "FAIL",
+    "actual": [
+      53.68,
+      51.37,
+      44.24,
+      41.74
+    ],
+    "required": [
+      80,
+      80,
+      80,
+      75
+    ],
+    "rerun": false
+  },
+  "remaining": [
+    "Actual outbox/worker/Restate projection and design result",
+    "Photo upload and scoped content-aware selection in the real journey",
+    "Native Canva languages/fonts/edit-save-reexport and human quality",
+    "Hosted two-user customer and other-three-tools journeys/PWA",
+    "Interrupted uploads/unsaved-state/orphan reconciliation",
+    "Current full regression/coverage/remote CI/security gates",
+    "Legacy/coordinated restore/rollback/hosting/trusted HTTPS/migrations/cutover"
+  ],
+  "rollout": {
+    "publicGenerationEnabled": false,
+    "privateFixtureGenerationEnabled": true,
+    "designerLauncher": "soon",
+    "paidCalls": false,
+    "push": false,
+    "deploy": false,
+    "productionWrites": false,
+    "goal": "active"
+  },
+  "reportHashes": {
+    "output/qualification/2026-10-03/customer-generation-runtime/red.json": "bef633037317b47f023e4095f1acac0638d388e469a7fc76af30657f82aeb15d",
+    "output/qualification/2026-10-03/customer-generation-runtime/green.json": "acb905d62756b4b70469ef9ccf8cd52a046179b278d9ea9b248f09a37cf31b29"
+  },
+  "sourceHashes": {
+    "apps/core/src/app.ts": "903399c04848a5d1c60216500001e8523a2649188dcf1cd1d08ca20f4319df1e",
+    "apps/core/src/core-helpers.ts": "c50b51e482b44ae9a6092d4a8896a97b89fb5907e3585418fe225663641c44ea",
+    "apps/core/src/entrypoint-options.ts": "7a6e7aecf2474650aac59ac50ac5dbc13dca7edb95fa2e60185f055eac059104",
+    "apps/core/test/customer-requests.test.ts": "7b281417823f8e9d1d7d62740eb590540dcdfa7974dfad3a52e599058797ef9d",
+    "apps/core/test/production-entrypoint.test.ts": "fcaedfed7cdd98baff67db76580103346f38be96db96b0531ef20817c6b2e053",
+    "infra/docker/.env.production.example": "c63a391460f357d99d5d97ce7931e1828509773abe844e82d2c82f1d2a0bf331"
+  }
+}

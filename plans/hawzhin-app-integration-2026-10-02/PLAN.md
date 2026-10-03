@@ -247,3 +247,8 @@ container IDs/states unchanged. NATIVE_CUSTOMER_CORE_PROOF.json records scope.
 No production write, push, deployment or paid call. Hosted TLS/DNS/browser login/
 upload, generation/worker/native Canva/quality, coverage/remote CI/restore/hosting/
 cutover remain open. Full app goal stays active.
+
+
+## ADR278 actual browser canonical intake — 2026-10-03
+
+Existing explicit generation startup switch now reaches the production factory; defaults/example/public remain off. Malformed switches and generation-on/API-off refuse.82/2 baseline →118/0/0 contracts;757 strict roots/types/security/egress/ratchet pass. Actual production browser/native Auth/Core/restricted DB form201, reload and exact body/key replay200 pass9 browser/22 native Core controls on fresh126/89 migrations. Native stored declared Sorani copy/story geometry/owner and one canonical outbox command match. No projected task/worker/provider/Canva result is fabricated. All owned resources/private inputs removed; ten prior containers unchanged. Prior expiry8/0/default services25/full suites retained, not rerun; coverage FAIL. Whole worker/Canva/photos/hosted/native human quality/CI/restore/hosting/cutover remain open. NATIVE_INTAKE_PROOF.json.

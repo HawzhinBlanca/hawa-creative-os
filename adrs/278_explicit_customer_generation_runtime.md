@@ -1,6 +1,6 @@
 # ADR278 — Explicit customer generation runtime configuration
 
-Date: 2026-10-03. Status: implementation; public admission remains open.
+Date: 2026-10-03. Status: local native intake qualified; public/full worker admission open.
 Requirements: FR-001/006/017/068/069, NFR-006/012/024/025.
 Sources: MASTER_SPEC.md, docs/09_MESSAGING_AND_OFFICE_INBOX.md,
 docs/14_SECURITY_THREAT_MODEL.md, docs/17_UI_UX.md, docs/30_CURRENT_STUDIO_CONTRACT.md,
