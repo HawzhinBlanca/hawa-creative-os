@@ -122,3 +122,28 @@ describe('hunt 3 / F1: with nothing on the way, words that are no brief never op
   });
 });
 
+
+describe('hunt 3 / B1: a brief that ends with "send it to me" or "go ahead" is a brief, never approval words', () => {
+  const BRIEFS = ['KAAE Chess Club tournament\n8 November 2026, 3 pm, Family Mall\n\nDon\'t forget the logo, and send it to me by Thursday.',
+    'KAAE Chess Club tournament, 8 November 2026, 3 pm, Family Mall. Please send it to me by Thursday.',
+    'Graduation ceremony 12 October 7pm Rotana Hotel. no changes needed to the logo',
+    'Teacher Appreciation Day, 20 October 2026 at 2 pm, KAAE hall. Go ahead!'];
+  it.each(BRIEFS)('%s', (words) => {
+    expect(readIntentByRules(words).intent).not.toBe('approval');
+    // With nothing on the way it opens; it was answered "Thank you." and nothing was opened.
+    expect(plan(words)).toMatchObject({ kind: 'open' });
+  });
+
+  it('approval words that only mention the event stay approval words, told to the office', () => {
+    for (const words of ['looks good, send it', 'perfect, send it, the ceremony is on 12 October', 'approved, print it for the 12 October ceremony']) {
+      expect(readIntentByRules(words).intent, words).toBe('approval');
+      expect(plan(words, [view('A', 'in_review', 'KAAE: Graduation ceremony')]), words).toMatchObject({ kind: 'tell', note: 'approval' });
+    }
+  });
+
+  it('through intake: the brief opens a request', async () => {
+    const chat = chatId();
+    const answer = await intake(app(), text(chat, BRIEFS[1]));
+    expect(answer).toMatchObject({ lifecycleAction: 'open-request' });
+  });
+});

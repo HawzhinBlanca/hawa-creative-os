@@ -563,8 +563,16 @@ function editsAPart(t: string): boolean {
  * read as approval words. An approval phrase said in the negative is never approval.
  */
 const NEGATED_APPROVAL = /\b(?:don'?t|do\s+not|not|never|no\s+need\s+to|can'?t|cannot|won'?t|shouldn'?t)\s+(?:yet\s+)?(?:go\s+ahead|proceed|finali[sz]e)\b/i;
+/**
+ * Hunt 3 (2026-10-03): where the first approval phrase starts. A brief laid out first and closed with "send it to me
+ * by Thursday", "no changes needed to the logo" or "Go ahead!" was read as approval words: with nothing on the way it
+ * was answered "Thank you." and nothing opened. Event copy before the approval words is a brief.
+ */
+const APPROVAL_AT = new RegExp(`(?<![\\p{L}\\p{N}])(?:${APPROVAL_PHRASES.map((p) => p.replace(/\s+/g, '\\s+')).join('|')})(?![\\p{L}\\p{N}])`, 'iu');
 function readsAsApproval(text: string, core: string): boolean {
   if (core.length > 160 || !any(core, APPROVAL_PHRASES) || refusesApproval(core) || NEGATED_APPROVAL.test(core)) return false;
+  const at = APPROVAL_AT.exec(core)?.index ?? 0;
+  if (at > 0 && carriesBriefCopy(core.slice(0, at))) return false;
   let rest = core;
   for (const phrase of APPROVAL_PHRASES) rest = rest.replace(new RegExp(phrase.replace(/\s+/g, '\\s+'), 'giu'), ' ');
   rest = rest.replace(PRAISE, ' ').replace(/[\s,،!.:;-]+/g, ' ').trim();
