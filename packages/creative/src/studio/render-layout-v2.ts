@@ -1139,11 +1139,11 @@ export function balancedBoxWidths(
       if (lines.length < 2) continue;
       const last = lines[lines.length - 1];
       const widest = Math.max(...lines.map(widthOf));
-      const widow = !/\s/.test(last.trim()) && widthOf(last) < 0.5 * widest;
+      const widow = !BREAKABLE_SPACE.test(last.trim()) && widthOf(last) < 0.5 * widest;
       if (!widow) continue;
 
       // Tightest width that keeps the line count. Narrower than the longest word can never work.
-      const longestWord = Math.max(...copy.trim().split(/\s+/).map(widthOf));
+      const longestWord = Math.max(...copy.trim().split(BREAKABLE_SPACE).map(widthOf));
       let lo = Math.ceil(longestWord);
       let hi = Math.floor(t.width);
       if (lo >= hi || wrap(lo).length < lines.length) continue;
@@ -1157,7 +1157,7 @@ export function balancedBoxWidths(
       if (balanced.length !== lines.length) continue;
       const balancedLast = balanced[balanced.length - 1];
       // Only worth a change if the last line is no longer a stranded word.
-      if (!/\s/.test(balancedLast.trim()) && widthOf(balancedLast) < 0.5 * Math.max(...balanced.map(widthOf))) continue;
+      if (!BREAKABLE_SPACE.test(balancedLast.trim()) && widthOf(balancedLast) < 0.5 * Math.max(...balanced.map(widthOf))) continue;
 
       // Widest width that still gives exactly these breaks.
       const same = (w: number) => {
@@ -1553,6 +1553,13 @@ function shapedAdvance(font: any, text: string): { advanceWidth: number; glyphCo
 /**
  * Greedily wraps text into lines fitting within maxWidth px based on exact font metrics.
  */
+/**
+ * The spaces a line may break at: every white space but the no-break ones (U+00A0, U+2007, U+202F,
+ * U+FEFF), which pango, PowerPoint and Canva keep whole. Splitting on /\s+/ broke "Quality\u00A0
+ * Assurance" here while the deck kept it on one line, past the box this measured.
+ */
+const BREAKABLE_SPACE = /[\t\n\v\f\r \u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]+/;
+
 export function wrapTextWithFontkit(
   text: string,
   maxWidth: number,
@@ -1570,7 +1577,7 @@ export function wrapTextWithFontkit(
       allLines.push('');
       continue;
     }
-    const words = trimmed.split(/\s+/).filter(Boolean);
+    const words = trimmed.split(BREAKABLE_SPACE).filter(Boolean);
     if (words.length === 0) {
       allLines.push('');
       continue;

@@ -235,3 +235,23 @@ describe('a story-format recipe sets its logo and copy on the grid it declares',
     });
   }
 });
+
+describe('the renderer never breaks a line at a no-break space', () => {
+  // Before: the fontkit wrap split words on /\s+/, which includes U+00A0, U+202F and U+2007, so a
+  // title typed "Quality Assurance Workshop" (pasted from a document) was measured and drawn on
+  // two lines while pango (the Sorani path), PowerPoint and Canva keep it whole: the deck's line ran
+  // past the box the preview measured.
+  const t = { copyIndex: 0, role: 'title' as const, x: 0, y: 0, width: 600, height: 100, fontSize: 60, lineHeight: 1.2, fontFamily: 'Inter' as const, color: '#000000' as const, align: 'left' as const, bold: true };
+  for (const space of [' ', ' ', ' ']) {
+    it(`U+${space.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`, () => {
+      const copy = ['Quality', 'Assurance', 'Workshop'].join(space);
+      const [m] = measureTextGeometry({ text: [t] } as unknown as StudioLayoutV2, { 0: copy });
+      expect(m.status === 'measured' && m.lineCount).toBe(1);
+      expect(wrappedLinesOf(t as never, copy)).toEqual([copy]);
+    });
+  }
+  it('still breaks at an ordinary space', () => {
+    const [m] = measureTextGeometry({ text: [t] } as unknown as StudioLayoutV2, { 0: 'Quality Assurance Workshop' });
+    expect(m.status === 'measured' && m.lineCount).toBe(2);
+  });
+});
