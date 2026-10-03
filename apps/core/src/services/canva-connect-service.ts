@@ -636,7 +636,8 @@ export class CanvaConnectService {
         if (!revisionCopy && s.nativeRecovery) fail(409,'NATIVE_COPY_CONFIRMATION_REQUIRED','Confirm the exact final copy against the linked design before capture');
         // Both preview and editable capture must belong to the same human confirmation.
         if (format === 'pptx' || revisionCopy) {
-          const source = format === 'pptx' ? await this.editableSource(s,taskId,binding.client_id,design.id,db) : undefined;
+          // A PDF of a confirmed revision is read against the same frozen copy and capitals allowance.
+          const source = format !== 'png' ? await this.editableSource(s,taskId,binding.client_id,design.id,db) : undefined;
           if (revisionCopy) {
             metadata.checkingPolicy=freezeConfirmedSourceDisplay(
               await resolveManualExportPolicy(db,s.tenantId,taskId,binding.client_id,s), source);
@@ -764,11 +765,16 @@ export class CanvaConnectService {
             // ADR-258: a PDF is read back for what its file alone can show (one page, embedded fonts, live
             // text, the imported source's Latin-script copy found exactly). Arabic-script copy is checked
             // visually on the PNG of the same version; a PDF that cannot be read records why.
+            // A revised design's PDF is read against the copy the office confirmed for it (the policy frozen
+            // at admission, ADR-276), never the copy of the source it was first imported from.
             try {
-              const source=await this.editableSource(s,taskId,row.client_id,row.design_id);
-              const copy=Array.isArray(source?.manifest?.copy)?source!.manifest.copy.filter((l: unknown): l is string=>typeof l==='string'):[];
-              const capitals=importedSourceCapitals(source?.manifest ?? null);
-              contentCheck={...checkCanvaPdf(bytes,copy,capitals && capitals.length===copy.length?{uppercaseByIndex:capitals}:{}),expectedCopy:copy};
+              const policy = row.metadata.checkingPolicy as ExportCheckPolicy | undefined;
+              const source=policy ? undefined : await this.editableSource(s,taskId,row.client_id,row.design_id);
+              const copy=policy ? policy.copy
+                : Array.isArray(source?.manifest?.copy)?source!.manifest.copy.filter((l: unknown): l is string=>typeof l==='string'):[];
+              const capitals=policy ? policy.options.uppercaseByIndex : importedSourceCapitals(source?.manifest ?? null);
+              contentCheck={...checkCanvaPdf(bytes,copy,capitals && capitals.length===copy.length?{uppercaseByIndex:capitals}:{}),expectedCopy:copy,
+                ...(policy ? {checkingPolicy:policy} : {})};
             } catch (err) {
               contentCheck={source:'canva_exported_pdf',pass:false,copyPass:null,errors:[`Not read: ${(err as Error)?.message || err}`]};
             }

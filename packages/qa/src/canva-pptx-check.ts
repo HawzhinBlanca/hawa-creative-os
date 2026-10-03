@@ -268,7 +268,6 @@ export function checkCanvaPptx(
   const texts: string[] = [];
   /** ADR-275: each object's text as drawn: runs under cap="all" or cap="small" in capitals. */
   const shownTexts: string[] = [];
-  const capitalsByObject: boolean[] = [];
   const sourceTextObjects: PptxTextObject[] = [];
   const identities: Array<{ ':@'?: Record<string, unknown> }> = [];
   findOwners(doc, 'p:cNvPr', identities);
@@ -299,12 +298,17 @@ export function checkCanvaPptx(
     const paragraphTexts: string[] = [];
     for (const paragraph of paragraphs) {
       const start = text.length;
-      const nodes: any[] = [];
-      find(paragraph, 'a:t', nodes);
-      for (const n of nodes) {
-        if (Array.isArray(n)) text += n.map((x: any) => String(x?.['#text'] ?? '')).join('');
-        else if (n && typeof n === 'object') text += String(n['#text'] ?? '');
-        else if (typeof n === 'string') text += n;
+      // A soft line break (`a:br`) draws a new line inside the paragraph: two words either side of
+      // one are not one word.
+      for (const child of Array.isArray(paragraph) ? paragraph : [paragraph]) {
+        if (child && typeof child === 'object' && Object.hasOwn(child, 'a:br')) { text += '\n'; continue; }
+        const nodes: any[] = [];
+        find(child, 'a:t', nodes);
+        for (const n of nodes) {
+          if (Array.isArray(n)) text += n.map((x: any) => String(x?.['#text'] ?? '')).join('');
+          else if (n && typeof n === 'object') text += String(n['#text'] ?? '');
+          else if (typeof n === 'string') text += n;
+        }
       }
       paragraphTexts.push(text.slice(start));
       text += '\n';
@@ -313,12 +317,26 @@ export function checkCanvaPptx(
     const textIdx = texts.length;
     texts.push(text.trim());
     {
-      // ADR-275: the same text with every run whose cap property draws it in capitals uppercased.
+      // ADR-275: the same text with every run whose cap property draws it in capitals uppercased. A
+      // run without its own cap takes the frame's list style for the paragraph's level (`a:lstStyle`
+      // `a:lvlNpPr/a:defRPr`), as PowerPoint and Canva draw it; a run's own cap, "none" included, wins.
+      const listStyles: any[] = [];
+      find(shape, 'a:lstStyle', listStyles);
+      const listCap = (level: number): string | undefined => {
+        const levels: any[] = [];
+        find(listStyles, `a:lvl${level}pPr`, levels);
+        const defaults: any[] = [];
+        findOwners(levels, 'a:defRPr', defaults);
+        return defaults.map(o => String(o?.[':@']?.['@_cap'] ?? '').trim()).find(Boolean);
+      };
       let shown = '';
-      let anyCaps = false;
       for (const paragraph of paragraphs) {
+        const children: any[] = Array.isArray(paragraph) ? paragraph : [paragraph];
+        const lvl = Number(children.find(child => child?.['a:pPr'] !== undefined)?.[':@']?.['@_lvl'] ?? 0);
+        const inherited = listCap(Number.isInteger(lvl) && lvl >= 0 && lvl <= 8 ? lvl + 1 : 1);
         // Runs are the paragraph's own children, in document order.
-        for (const child of Array.isArray(paragraph) ? paragraph : [paragraph]) {
+        for (const child of children) {
+          if (child && typeof child === 'object' && Object.hasOwn(child, 'a:br')) { shown += '\n'; continue; }
           const runNode = child?.['a:r'] ?? child?.['a:fld'];
           if (!runNode) continue;
           const nodes: any[] = [];
@@ -327,15 +345,13 @@ export function checkCanvaPptx(
             .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join('');
           const props: any[] = [];
           findOwners(runNode, 'a:rPr', props);
-          const cap = props.map(o => String(o?.[':@']?.['@_cap'] ?? '').trim()).find(Boolean) || 'none';
+          const cap = props.map(o => String(o?.[':@']?.['@_cap'] ?? '').trim()).find(Boolean) || inherited || 'none';
           const drawnInCaps = cap === 'all' || cap === 'small';
-          if (drawnInCaps && runText !== runText.toUpperCase()) anyCaps = true;
           shown += drawnInCaps ? runText.toUpperCase() : runText;
         }
         shown += '\n';
       }
       shownTexts.push(shown.trim());
-      capitalsByObject.push(anyCaps);
     }
     const owners: Array<{ ':@'?: Record<string, unknown> }> = [];
     findOwners(shape, 'p:cNvPr', owners);
@@ -349,6 +365,7 @@ export function checkCanvaPptx(
     }
 
     const isArabic = ARABIC_SCRIPT.test(text);
+    const arabicLetters = [...text].some(character => /\p{Letter}/u.test(character) && ARABIC_SCRIPT.test(character));
     if (isArabic) {
       arabicObjects++;
       const owners: any[] = [];
@@ -388,6 +405,42 @@ export function checkCanvaPptx(
       });
     }
 
+    /** Whether `face` meets the font policy for `script` text in this object. */
+    const judgeFace = (script: 'latin' | 'arabic', face: string, role: string):
+      { matches: boolean; expectedFont?: string; reason: string } => {
+      const familyMatches = (expected: string) => fontFamilyMatches(face, expected);
+      let expectedFont: string | undefined;
+      let matches: boolean;
+      let reason: string;
+      if (options.allowedFontsByScript) {
+        const allowed = options.allowedFontsByScript[script] || [];
+        fontExpectations.push(...allowed);
+        matches = allowed.some(font => face.toLowerCase() === font.toLowerCase());
+        reason = `The ${script} run must explicitly use an approved client font family`;
+      } else if (options.fontsByIndex) {
+        expectedFont = options.fontsByIndex[textIdx];
+        fontExpectations.push(expectedFont || 'none sent');
+        matches = expectedFont !== undefined && expectedFont !== '' && familyMatches(expectedFont);
+        reason = expectedFont ? `Sent in '${expectedFont}', returned by Canva in '${face}' for ${script} text`
+          : 'Canva returned a text object that was not sent';
+      } else if (options.documentKind === 'formal_document' && role === 'body') {
+        expectedFont = script === 'arabic' ? (options.formalBodyFonts?.arabic || options.scriptFonts?.arabic || 'Noto Sans Arabic')
+          : (options.formalBodyFonts?.latin || 'Verdana');
+        fontExpectations.push(expectedFont);
+        matches = familyMatches(script === 'arabic' ? formalBodyArabic : formalBodyLatin);
+        reason = `Formal document body must use ${expectedFont}; observed '${face}' for ${script} text`;
+      } else if (options.documentKind === 'formal_document' || options.documentKind === 'design_piece') {
+        fontExpectations.push(face);
+        matches = admitted.some(familyMatches);
+        reason = `Typeface '${face}' is not in the admitted Canva-native font list`;
+      } else {
+        expectedFont = script === 'arabic' && options.scriptFonts?.arabic ? options.scriptFonts.arabic : requiredFont;
+        fontExpectations.push(expectedFont);
+        matches = fontFamilyMatches(face, expectedFont, true);
+        reason = `Expected font '${expectedFont}', observed '${face}' (Canva substitution or unlisted font)`;
+      }
+      return { matches, ...(expectedFont ? { expectedFont } : {}), reason };
+    };
     for (const run of runs) {
       const runTextNodes: any[] = [];
       find(run, 'a:t', runTextNodes);
@@ -396,6 +449,7 @@ export function checkCanvaPptx(
       if (!runText.trim()) continue;
       const scripts: Array<'latin' | 'arabic'> = [];
       if (ARABIC_SCRIPT.test(runText)) scripts.push('arabic');
+      const neutral = !scripts.length && !/\p{Script=Latin}/u.test(runText);
       if (/\p{Script=Latin}/u.test(runText) || !scripts.length) scripts.push('latin');
 
       const properties: any[] = [];
@@ -427,52 +481,51 @@ export function checkCanvaPptx(
         }
         const face = declared[0];
         fonts.push(face);
-        const familyMatches = (expected: string) => fontFamilyMatches(face, expected);
-        let expectedFont: string | undefined;
-        let matches: boolean;
-        let reason: string;
-        if (options.allowedFontsByScript) {
-          const allowed = options.allowedFontsByScript[script] || [];
-          fontExpectations.push(...allowed);
-          matches = allowed.some(font => face.toLowerCase() === font.toLowerCase());
-          reason = `The ${script} run must explicitly use an approved client font family`;
-        } else if (options.fontsByIndex) {
-          expectedFont = options.fontsByIndex[textIdx];
-          fontExpectations.push(expectedFont || 'none sent');
-          matches = expectedFont !== undefined && expectedFont !== '' && familyMatches(expectedFont);
-          reason = expectedFont ? `Sent in '${expectedFont}', returned by Canva in '${face}' for ${script} text`
-            : 'Canva returned a text object that was not sent';
-        } else if (options.documentKind === 'formal_document' && role === 'body') {
-          expectedFont = script === 'arabic' ? (options.formalBodyFonts?.arabic || options.scriptFonts?.arabic || 'Noto Sans Arabic')
-            : (options.formalBodyFonts?.latin || 'Verdana');
-          fontExpectations.push(expectedFont);
-          matches = familyMatches(script === 'arabic' ? formalBodyArabic : formalBodyLatin);
-          reason = `Formal document body must use ${expectedFont}; observed '${face}' for ${script} text`;
-        } else if (options.documentKind === 'formal_document' || options.documentKind === 'design_piece') {
-          fontExpectations.push(face);
-          matches = admitted.some(familyMatches);
-          reason = `Typeface '${face}' is not in the admitted Canva-native font list`;
-        } else {
-          expectedFont = script === 'arabic' && options.scriptFonts?.arabic ? options.scriptFonts.arabic : requiredFont;
-          fontExpectations.push(expectedFont);
-          matches = fontFamilyMatches(face, expectedFont, true);
-          reason = `Expected font '${expectedFont}', observed '${face}' (Canva substitution or unlisted font)`;
+        // Digits and punctuation belong to no script; Canva gives them a run of their own ("8:30" in
+        // en-US between Sorani runs, multilingual export 2026-09-27) in the block's own face. In a block
+        // with Arabic-script letters such a run may use the face the policy admits for either script.
+        let verdict = judgeFace(script, face, role);
+        if (!verdict.matches && neutral && arabicLetters) {
+          const asArabic = judgeFace('arabic', face, role);
+          if (asArabic.matches) verdict = asArabic;
         }
+        const { matches, expectedFont, reason } = verdict;
         if (!matches) offendingObjects.push({ index: textIdx, text: text.trim().slice(0, 50), role,
           observedFont, ...(expectedFont ? {expectedFont} : {}), reason });
       }
     }
   }
 
+  // Text in a graphic frame (a table's cells) is drawn on the slide but is no shape: it was never read,
+  // so a table of words nobody approved passed the copy check. Each such frame counts as a text object
+  // the copy does not have, with no addressable source identity.
+  const frames: any[] = [];
+  find(doc, 'p:graphicFrame', frames);
+  for (const frame of frames) {
+    const nodes: any[] = [];
+    find(frame, 'a:t', nodes);
+    const frameText = nodes.flatMap(node => Array.isArray(node) ? node : [node])
+      .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join(' ').trim();
+    if (!frameText) continue;
+    texts.push(frameText);
+    shownTexts.push(frameText);
+    unaddressableText = true;
+  }
+
   // Word joiners (U+2060) are invisible: the studio deck adds them so Canva keeps "K-12" on one line.
   const normalize = (s: string) => s.replace(/\u2060/g, '').replace(/\s+/g, ' ').trim();
-  // ADR-275: a block set in capitals matches its copy without regard to case, whether Canva kept the
-  // typed copy under cap="all" or wrote the capitals into the text. Any other block matches exactly
-  // and must not be drawn in capitals the requester did not type.
-  const caseFold = (s: string) => normalize(s).toUpperCase();
-  const copyMatches = (t: string, i: number) => options.uppercaseByIndex?.[i]
-    ? caseFold(t) === caseFold(expectedCopy[i])
-    : normalize(t) === normalize(expectedCopy[i]) && !capitalsByObject[i];
+  // ADR-275: a block set in capitals passes when its text, or its text drawn under cap, equals the copy
+  // in capitals: Canva may keep the typed copy under cap="all" or write the capitals into the text, but a
+  // title handed back without its capitals (cap dropped, or on some runs only) is not the design sent.
+  // Capitals are Latin only (`uppercaseApplies`): a block with Arabic-script letters is drawn as typed.
+  // Any other block matches exactly and must not be drawn in capitals the requester did not type.
+  const copyMatches = (t: string, i: number) => {
+    const expected = expectedCopy[i];
+    if (options.uppercaseByIndex?.[i] && !ARABIC_SCRIPT.test(expected)) {
+      return normalize(shownTexts[i]) === normalize(expected).toUpperCase();
+    }
+    return normalize(t) === normalize(expected) && normalize(shownTexts[i]) === normalize(expected);
+  };
   const copyPass = texts.length === expectedCopy.length && texts.every(copyMatches);
   const fontPass = !unresolvedFont && fonts.length > 0 && offendingObjects.length === 0;
   const hasDirectionMetadata = paragraphDirections.some(paragraph => paragraph.observed !== 'absent');

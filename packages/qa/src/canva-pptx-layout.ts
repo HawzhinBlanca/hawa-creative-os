@@ -149,7 +149,8 @@ function readFrame(shape: Node, matrix: Matrix, scale: number): { frame?: PptxTe
     const level = Math.min(9, Math.max(1, num(child(paragraph, 'a:pPr'), 'lvl', 0) + 1));
     const levelDefaults = path(listStyle, `a:lvl${level}pPr`, 'a:defRPr');
     let line = '';
-    for (const run of kids(paragraph).filter((n) => tagOf(n) === 'a:r' || tagOf(n) === 'a:fld')) {
+    for (const run of kids(paragraph).filter((n) => tagOf(n) === 'a:r' || tagOf(n) === 'a:fld' || tagOf(n) === 'a:br')) {
+      if (tagOf(run) === 'a:br') { line += '\n'; continue; }
       const text = textOf(run);
       line += text;
       if (!text.trim()) continue;
@@ -214,6 +215,17 @@ export interface PptxPicture {
   box: PptxBox;
   /** The media part the picture draws, e.g. `ppt/media/image1.jpeg`. */
   media: string;
+  /**
+   * How the picture is turned on the slide, through every enclosing group: the angle of its x axis in
+   * degrees (0 to 360) and whether it is mirrored. A logo flipped or turned in its own box has the same box.
+   */
+  orientation: { rotation: number; mirrored: boolean };
+  /**
+   * The picture's opacity, 0 to 1 (`a:blip/a:alphaModFix amt`, 1 when absent). Canva writes amt="0" on the
+   * invisible image fills it puts under its text boxes (every export on record), and a picture a person
+   * set fully transparent draws nothing either.
+   */
+  opacity: number;
 }
 
 export interface PptxPictures {
@@ -261,12 +273,18 @@ export function readPptxPictures(bytes: Uint8Array): PptxPictures {
   const picture = (node: Node, kind: PptxPicture['kind'], matrix: Matrix) => {
     const props = child(node, kind === 'pic' ? 'p:spPr' : 'p:spPr');
     const fill = kind === 'pic' ? child(node, 'p:blipFill') : child(props, 'a:blipFill');
-    const embed = attr(child(fill, 'a:blip'), 'r:embed');
+    const blip = child(fill, 'a:blip');
+    const embed = attr(blip, 'r:embed');
+    const amt = Number(attr(child(blip, 'a:alphaModFix'), 'amt') ?? 100000);
+    const opacity = Number.isFinite(amt) ? Math.min(1, Math.max(0, amt / 100000)) : 1;
     const f = readXfrm(props);
     const media = embed ? targets.get(embed) : undefined;
     if (!f || !media) return;
     const nv = child(node, kind === 'pic' ? 'p:nvPicPr' : 'p:nvSpPr');
-    pictures.push({ kind, shapeId: attr(child(nv, 'p:cNvPr'), 'id') ?? '', box: boundsOf(multiply(matrix, aboutCentre(f)), f), media });
+    const placed = multiply(matrix, aboutCentre(f));
+    const rotation = ((Math.atan2(placed[1], placed[0]) * 180) / Math.PI + 360) % 360;
+    pictures.push({ kind, shapeId: attr(child(nv, 'p:cNvPr'), 'id') ?? '', box: boundsOf(placed, f), media,
+      orientation: { rotation, mirrored: placed[0] * placed[3] - placed[1] * placed[2] < 0 }, opacity });
   };
   const walk = (container: Node | undefined, matrix: Matrix, depth: number) => {
     if (depth > 32) throw new Error('Groups nested too deep');
