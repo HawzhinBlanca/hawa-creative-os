@@ -107,14 +107,14 @@ Titles of realistic office briefs, opened through intake (the live brief, the la
 | en-brief-27 (staff football tournament, 14 November) | KAAE staff football tournament, 14 November 2… | KAAE Staff Football Tournament |
 | ckb-brief-02 (Nawroz celebration on 20 March at a park) | the name, then "on 20 March in Sami Abdulrahman Park" | the name only |
 | ckb-brief-03 (graduation, 12 October, Rotana Hotel) | the name, then ", 12 October, Rotana Hotel" | the name only |
-| ckb-brief-01 (laid out, date on its own line) | unchanged (its request lead-in stays, see below) | unchanged |
-| ckb-brief-12 (teachers' course, 10 November, KAAE hall) | lead-in, name, date, cut at 45 | date gone; still cut at 45 by its lead-in |
-| ho-brief-01 (staff picnic on Friday) | Sewa: There, we need something for our staff picnic… | Sewa: There, we need something for our staff picnic |
-| ho-brief-03 (science fair next week) | Sewa: Could you do something for the science fair n… | Sewa: Could you do something for the science fair |
+| ckb-brief-01 (laid out, date on its own line) | greeting and request words in the name | the event's name only (follow-up below) |
+| ckb-brief-12 (teachers' course, 10 November, KAAE hall) | lead-in, name, date, cut at 45 | the course's name only (follow-up below) |
+| ho-brief-01 (staff picnic on Friday) | Sewa: There, we need something for our staff picnic… | Sewa: Staff Picnic (follow-up below) |
+| ho-brief-03 (science fair next week) | Sewa: Could you do something for the science fair n… | Sewa: Science Fair (follow-up below) |
 
 No title became empty or lost its event's name (the test checks that each name is the requester's own words, in order). Names that only look like a date or a place keep their words ("Art in the Park", "Black Friday Sale", "Run for Hope", "Erbil Book Fair 2026", "KAAE K-12 Pilot Study", "Graduation at the Rotana Hotel").
 
-**Not addressed (request lead-ins and greetings, not tails).** "Could we get a flyer and an Instagram post for the Quality Week launch…", "Hi there, we need something for…", "hey, could you do something for…", the Sorani "we want a (new) poster for …" lead-in, and a Sorani brief whose first line is only a greeting (titled with the greeting; the copy reader also prints that greeting line) keep their old titles. The last one is a copy bug, not a title one, and needs its own fix.
+**Request lead-ins and greetings** were left to the follow-up below.
 
 The natural-language stress script S156 matched the football poster's title as "…football" in small letters; its pattern now ignores case (the title is "KAAE Staff Football Tournament").
 
@@ -129,3 +129,18 @@ The natural-language stress script S156 matched the football poster's title as "
 - New: `canary-friction-2026-10-03.test.ts` 33 tests (26 failed before the fix); worker open test 1 (failed before).
 - Updated to the single message: four ADR-235 tests in `client-question-and-line-capitals.test.ts` now check that Core says nothing beside the open and that the first projection carries the outcome; S156's title pattern ignores case.
 - NLU evaluation unchanged: 349/356, original 300/302, costly errors 0 (no labelled case has a request with a designer).
+
+### Follow-up (2026-10-03): a greeting is never copy, and never the name
+
+**Before.** A brief whose first line or first words were only a greeting printed the greeting as the design's headline and named the design after it: Sorani "hello brother" (and "hello", "hello sirs", "good morning") above a request line, a Sorani greeting and form of address before the request in one sentence, and a greeting line above laid-out copy in Sorani, English ("Hello") and Arabic ("peace be upon you"). English "Hi!" before a request sentence was already fixed in d17bae2d. The Sorani "hello, we want a poster for …" (no "make") printed the greeting and the request words whole; "Could we get a flyer and …" and "we're hoping for something for …" printed the request sentence whole; "Hi there, we need something for …" and "could you do something for …" named the design after the request.
+
+**Decision.**
+- `greetings.ts`: one list of greetings and forms of address in English, Sorani and Arabic (needs native review), used by the copy reader's greeting, lead-in and chat rules, by `GREETING_ONLY`, and by the title.
+- `chat-campaign-intake.ts`: a first line that is only a greeting, with more below it, is kept with the instructions and is not the headline. Below it the opening is read as before, except a request line that carries the event's name, which stays for the copy reader (`copyBesideRequest`), so "Good morning everyone / Could you design a poster for our Annual Accreditation Conference? / …" keeps the name. Without a greeting nothing changes. A greeting that is part of the copy ("Hello Summer!") stays.
+- Copy reader: Sorani "<a poster>-we want for …" (دەوێت) is a request; English "could/can we get/have …" and "we're hoping for …" are requests.
+- Title: a greeting with whom it greets ("Hi there,") and a design asked for as "something for …" lead to the subject ("Staff Picnic", "Science Fair", "Graduation Party").
+- The copy keeps the requester's words verbatim: only greetings and request words are left out.
+
+**Not addressed.** Arabic requests ("please design a poster for …") are not read as requests at all; such a brief opens for a designer with its request line as the name. A request line whose only words beside the request are not the client's name, without a greeting above it ("I need a poster for the launch, keep it formal"), keeps its old reading.
+
+**Verification.** 16 new route tests in `canary-friction-2026-10-03.test.ts` (14 failed before the fix; the two controls, a greeting above a request that carries the name and "Hello Summer!", passed); four rows of the F3 title table now expect the better names.

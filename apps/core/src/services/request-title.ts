@@ -15,14 +15,24 @@
 import { requestOperatingSubject } from '@hawa/domain';
 import { TITLE_CUT_LENGTH, trimTitleMarks } from '@hawa/integrations';
 import { afterPossessive, cutText, startsWithName } from '../core-helpers.js';
+import { ADDRESS_WORDS, GREETING_WORDS } from './greetings.js';
 
 const TITLE_NOUNS = 'poster|postr|flyer|banner|design|invitation|invite|card|post|story|brochure|certificate|announcement|graphic|cover|leaflet|infographic|thumbnail|ad|advert';
-const TITLE_GREETING = /^(?:(?:hi|hello|hey|dear\s+(?:team|all|colleagues|friends|sir|madam)|good\s+(?:morning|afternoon|evening)|salam|slaw|silav|سڵاو|بەڕێزان)(?=[\s,،!.:-]|$)[\s,،!.:-]*)+/iu;
+/** A greeting and whom it greets ("Hi there,", Sorani "hello brother", greetings.ts) before the name. */
+const TITLE_GREETING = new RegExp(`^(?:(?:${GREETING_WORDS}|dear\\s+(?:${ADDRESS_WORDS}))(?:[\\s,،]+(?:${ADDRESS_WORDS}))*(?=[\\s,،!.:-]|$)[\\s,،!.:-]*)+`, 'iu');
 const TITLE_REQUEST = new RegExp('^(?:(?:and|also|so|ok(?:ay)?|please|pls|plz|kindly)\\s+)*' +
   '(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+)?(?:make|mak|create|design|prepare|produce|do)\\s+(?:us\\s+|me\\s+)?|' +
   "(?:we|i)\\s+(?:need|want|would\\s+like|'d\\s+like)\\s+|(?:please\\s+)?(?:make|mak|create|design|prepare|produce)\\s+(?:us\\s+|me\\s+)?)?" +
   "(?:(?:a|an|another|one\\s+more|new|the)\\s+)?" +
   `(?=(?:[\\p{L}'-]+\\s+){0,2}(?:${TITLE_NOUNS})s?\\b)`, 'iu');
+/**
+ * ADR-284 addendum (follow-up, 2026-10-03): a design asked for as "something": "we need something for our staff
+ * picnic …", "could you do something for the science fair …", "we're hoping for something for the graduation
+ * party …" were named after the request ("There, we need something for our staff picnic").
+ */
+const TITLE_SOMETHING = new RegExp('^(?:(?:and|also|so|ok(?:ay)?|please)\\s+)*(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+)?(?:make|create|design|prepare|produce|do|get)\\s+(?:us\\s+|me\\s+)?|' +
+  "(?:can|could|may)\\s+(?:we|i)\\s+(?:please\\s+)?(?:get|have)\\s+|(?:we|i)\\s*(?:need|want|(?:'d|’d|\\s+would)\\s+(?:like|love)|(?:'re|’re|\\s+are|'m|’m|\\s+am)\\s+(?:hoping|looking)\\s+for)\\s+)" +
+  '(?:something|anything)\\s+(?:(?:nice|simple|special|small|quick)\\s+)?(?:for|about|to\\s+(?:announce|promote|advertise|celebrate))\\s+(?:(?:our|my|the|this|their|a|an)\\s+)?', 'iu');
 const TITLE_NOUN_PLEASE = new RegExp(`^(?:${TITLE_NOUNS})s?\\s+(?:please|pls|plz)\\s*[:,-]\\s*`, 'iu');
 /**
  * ADR-231: the format and the verb before the subject: "Instagram post announcing our …", "a poster
@@ -74,7 +84,13 @@ function subjectName(rest: string): string {
  * Literacy Workshop".
  */
 export function spokenTitle(line: string): string {
-  const lead = line.replace(TITLE_GREETING, '').replace(TITLE_REQUEST, '').replace(TITLE_NOUN_PLEASE, '');
+  const greeted = line.replace(TITLE_GREETING, '');
+  const something = TITLE_SOMETHING.exec(greeted);
+  if (something) {
+    const subject = subjectName(greeted.slice(something[0].length));
+    if (/\p{L}/u.test(subject)) return subject.replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+  }
+  const lead = greeted.replace(TITLE_REQUEST, '').replace(TITLE_NOUN_PLEASE, '');
   const unnamed = lead.replace(NAME_BEFORE_FORMAT, '');
   const format = TITLE_FORMAT_LEAD.exec(lead) ?? TITLE_FORMAT_LEAD.exec(unnamed) ?? FORMAT_FOR_THE_NAME.exec(unnamed);
   if (format) {
