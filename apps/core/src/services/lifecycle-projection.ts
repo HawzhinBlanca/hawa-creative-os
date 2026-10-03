@@ -254,7 +254,11 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
   const hash = createHash('sha256').update(canonical({ ...input, draft: { ...draft, tenantId } })).digest('hex');
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
     const web = draft.platform==='hawzhin_web' ? await authorizeCustomerWebOpen(trx,tenantId,requestId) : null;
-    if(web && canonicalCustomerValue(web.draft)!==canonicalCustomerValue(draft))
+    // A zero-photo open journalled before every web brief carried a manifest (bug hunt 3) has none;
+    // only that exact legacy shape is accepted, never a dropped manifest that lists photos.
+    const legacyZeroPhoto = web && !draft.customerWebPhotos && web.draft.customerWebPhotos?.images.length===0
+      ? (({customerWebPhotos:_, ...rest}) => rest)(web.draft) : web?.draft;
+    if(web && canonicalCustomerValue(legacyZeroPhoto)!==canonicalCustomerValue(draft))
       throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT','The worker changed the retained customer brief');
     const anchored = await anchoredDecisionFor(trx,tenantId,requestId);
     if (anchored) {

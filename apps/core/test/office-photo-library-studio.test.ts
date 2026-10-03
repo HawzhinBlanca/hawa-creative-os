@@ -103,8 +103,9 @@ async function runTextOnlyRequest(env: Record<string, string | undefined>, optio
   vi.stubEnv('HAWA_STUDIO_VISUAL_REVIEW_ROUNDS', '0');
   vi.stubEnv('HAWA_MODEL_JUDGE', 'gpt-4.1-mini');
   for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v as string);
-  // A website (customer) request with no photo carries no customerWebPhotos manifest at all, so no
-  // webPhotoPolicy reaches its run (customer-web-lifecycle.ts sends the manifest only when photos exist).
+  // The legacy shape of a website (customer) request with no photo: no customerWebPhotos manifest, so no
+  // webPhotoPolicy reaches its run. Core now sends an empty manifest (customer-web-lifecycle.ts); this
+  // keeps the task-origin guard (isWebsiteTask) proven as defence in depth for tasks made before that.
   const customer = options.website ? await customerAccount() : undefined;
   const taskId = (await persistChatIntake(db, {
     platform: customer ? 'hawzhin_web' : 'telegram', sourceEventId: randomUUID(),
