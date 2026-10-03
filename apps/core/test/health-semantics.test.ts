@@ -44,11 +44,13 @@ function production(env: Record<string, string> = {}) {
 }
 
 describe('/v1/health in production', () => {
-  it('with the paid probe off: "disabled", no interval, no invented progress, and not degraded by it or by Canva', async () => {
+  it('with the paid probe off and no production call: the probe "disabled", the provider "idle", no invented progress, not degraded', async () => {
     production({ DESIGN_PIPELINE_V3_CHATS: ' -1001234, 5550001,-1001234,, ' });
     const res = await createApp({ db, enableBillingProbeSchedule: false }).request('/v1/health');
     const body = await res.json();
-    expect(body.dependencies.modelProvider).toBe('disabled');
+    // ADR-288: "disabled" is the probe's state; the provider is read from production's own calls.
+    expect(body.dependencies.modelProvider).toBe('idle');
+    expect(body.modelCalls).toMatchObject({ source: 'production_calls', recentCalls: 0, lastAnsweredAt: null });
     expect(body.lastPaidProbe).toMatchObject({ status: 'disabled', everyMinutes: null, at: null });
     expect(body.lastVerifiedProgressAt).toBeNull();
     expect(body.dependencies.canva).toBe('unverified');
@@ -67,5 +69,43 @@ describe('/v1/health in production', () => {
     expect(body.lastPaidProbe).toMatchObject({ status: 'unverified', everyMinutes: 30 });
     expect(body.status).toBe('degraded');
     expect(body.flags.DESIGN_PIPELINE_V3_CHATS).toBe(0);
+  });
+});
+
+/**
+ * ADR-288: with the probe off, the provider's status and the last verified progress come from the calls
+ * production made (here a requester-intent call; the studio and planner ledgers are read the same way).
+ */
+describe('/v1/health reads the model provider from production calls when the probe is off', () => {
+  const owner = createDb(process.env.TEST_DATABASE_OWNER_URL!);
+  const intentCall = (minutesAgo: number, answered: boolean) => owner.transaction().execute(async (trx) => {
+    await sql`SET LOCAL session_replication_role = replica`.execute(trx);
+    await sql`INSERT INTO hawa.requester_intent_calls (tenant_id, update_id, chat_id, client_id, model, request_sha256, reservation,
+        started_at, status, finished_at, acceptance, diagnostic)
+      VALUES (${TENANT}::uuid, ${Math.floor(Math.random() * 1e12) + 1}, '7000001', ${'c1000000-0000-4000-8000-000000000002'}::uuid,
+        'gpt-test', ${'b'.repeat(64)}, '{}'::jsonb, now() - make_interval(mins => ${minutesAgo + 1}), 'completed',
+        now() - make_interval(mins => ${minutesAgo}), ${answered ? 'response_received' : 'not_accepted'}, ${answered ? 'MODEL_HTTP_200' : 'MODEL_HTTP_429'})`.execute(trx);
+  });
+  afterAll(async () => { await owner.destroy(); });
+
+  it('an answered call: connected, and it is the last verified progress', async () => {
+    await intentCall(30, true);
+    production();
+    const body = await (await createApp({ db, enableBillingProbeSchedule: false }).request('/v1/health')).json();
+    expect(body.dependencies.modelProvider).toBe('connected');
+    expect(body.lastPaidProbe.status).toBe('disabled');
+    expect(body.modelCalls).toMatchObject({ recentCalls: 1, recentAnswered: 1, lastFailure: null });
+    expect(body.lastVerifiedProgressAt).toBe(body.modelCalls.lastAnsweredAt);
+    expect(Date.now() - Date.parse(body.lastVerifiedProgressAt)).toBeGreaterThan(29 * 60_000);
+    expect(body.status, JSON.stringify(body.dependencies)).toBe('healthy');
+  });
+
+  it('the newest three refused: failing, degraded, with the refusal named', async () => {
+    for (const m of [3, 2, 1]) await intentCall(m, false);
+    production();
+    const body = await (await createApp({ db, enableBillingProbeSchedule: false }).request('/v1/health')).json();
+    expect(body.dependencies.modelProvider).toBe('failing');
+    expect(body.modelCalls).toMatchObject({ recentCalls: 4, recentAnswered: 1, lastFailure: 'MODEL_HTTP_429' });
+    expect(body.status).toBe('degraded');
   });
 });

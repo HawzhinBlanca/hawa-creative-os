@@ -95,6 +95,7 @@ import { createChannelKillSwitchStore } from './services/channel-kill-switches.j
 import { acceptedServiceTokensOf, isInternalPath, registerLifecycleInternalRoutes, serviceTokenOf } from './routes/lifecycle-internal.routes.js';
 import { retiredTelegramSettings, telegramPollerOf } from './services/telegram-poller-owner.js';
 import { checkProductionFunnelHealth } from './services/funnel-monitor.js';
+import { latestOf, readProgressEvidence } from './services/progress-evidence.js';
 import { PaidModelProbeService } from './services/paid-model-probe.js';
 import { evaluatePaidModelHealth, paidModelConfigFingerprint, readLatestPaidModelObservation, type PaidModelHealth } from './services/paid-model-health.js';
 import { PhotoCutouts } from './services/design-studio/photo-cutouts.js';
@@ -725,7 +726,19 @@ export function createApp(options?: CreateAppOptions) {
     // ADR-158: with HAWA_BILLING_PROBE_ENABLED off there is no probe to wait for. "disabled" says so,
     // and it is not counted as degraded (production was "degraded" permanently for this alone).
     const paidProbeScheduled = !(options?.skipPaidModelProbe ?? !options?.enableBillingProbeSchedule);
-    const modelProviderStatus = !paidProbeScheduled && modelHealth.status === 'unverified' ? 'disabled' : modelHealth.status;
+    const paidProbeStatus = !paidProbeScheduled && modelHealth.status === 'unverified' ? 'disabled' : modelHealth.status;
+    // ADR-288: "disabled" described the probe, not the provider, while production models drafted every
+    // request. Without a probe the provider's status is read from production's own recorded calls:
+    // connected (one of the newest three answered), failing (none did), idle (no call in 24 h).
+    let progress: Awaited<ReturnType<typeof readProgressEvidence>> | null = null;
+    if (db && dbStatus === 'connected') {
+      try {
+        progress = await readProgressEvidence(db, { tenantId: DEFAULT_TENANT_ID, userId: SYSTEM_AUTOMATION_USER_ID });
+      } catch (err) {
+        log.warn('[HealthProbe] Production call evidence unreadable:', (err as Error)?.message || err);
+      }
+    }
+    const modelProviderStatus = paidProbeStatus === 'disabled' && progress ? progress.modelStatus : paidProbeStatus;
     const telegramApiStatus = hasTelegram ? await probeTelegram() : 'unconfigured';
     // Degraded rather than unhealthy: the worker waits for a healthy core before it starts, and
     // Restate can only register the worker once it is running.
@@ -776,7 +789,8 @@ export function createApp(options?: CreateAppOptions) {
     // Canva's "unverified" is not degraded: no Canva probe exists, so it could never become "connected"
     // (ADR-158). An expired connection is "reconnect_required" and a failing one opens the breaker.
     const isDegraded = canvaStatus === 'outage' || canvaStatus === 'degraded' || canvaStatus === 'reconnect_required' || channelKillSwitches.telegram || channelKillSwitches.waha
-      || (isProduction && modelProviderStatus !== 'connected' && modelProviderStatus !== 'disabled')
+      || (isProduction && modelProviderStatus !== 'connected' && modelProviderStatus !== 'disabled' && modelProviderStatus !== 'idle')
+      || modelProviderStatus === 'failing'
       || modelProviderStatus === 'unauthorized' || modelProviderStatus === 'unreachable'
       || modelProviderStatus === 'billing_exhausted' || modelProviderStatus === 'rate_limited'
       || modelProviderStatus === 'http_error' || modelProviderStatus === 'budget_held' || modelProviderStatus === 'reconciliation_required'
@@ -803,10 +817,14 @@ export function createApp(options?: CreateAppOptions) {
       // Who is meant to ask Telegram for updates: the watchdog then requires a polling worker colour
       // when this says worker (ADR-129).
       telegramPoller: telegramPollerOf(process.env),
-      lastVerifiedProgressAt,
+      // The newest thing production demonstrably did: a paid probe sent, a model call answered, or a
+      // Canva draft made (ADR-288). It was only ever a probe, so null for good with the probe off.
+      lastVerifiedProgressAt: latestOf(lastVerifiedProgressAt, progress?.modelCalls.lastAnsweredAt, progress?.lastDraftAt),
+      lastDraftAt: progress?.lastDraftAt ?? null,
+      modelCalls: progress?.modelCalls ?? null,
       lastPaidProbe: {
         at: modelHealth.at,
-        status: modelProviderStatus,
+        status: paidProbeStatus,
         observedStatus: modelHealth.observedStatus,
         schemaVersion: modelHealth.schemaVersion,
         detail: modelHealth.spendingStatus || null,
