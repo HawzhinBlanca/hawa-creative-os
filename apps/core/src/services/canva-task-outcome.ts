@@ -17,7 +17,7 @@
  *    never dragged back by a late or repeated notification.
  */
 import crypto from 'node:crypto';
-import { checkExportPictures, checkTextLines } from './export-picture-fidelity.js';
+import { checkExportPictures, checkExportTextShaping, checkTextLines } from './export-picture-fidelity.js';
 import { blobStoreFor, readPreferringStore } from './blob-store-context.js';
 import { sql, withRlsContext, TaskRepository, RevisionRepository, type Kysely, type Database, type TaskState, type CreateRevisionParams } from '@hawa/db';
 
@@ -229,19 +229,20 @@ export type ExportQcResult =
 async function addPictureFidelity(trx: Kysely<Database>, p: { tenantId: string; taskId: string }, exportRow: ExportRow,
   qc: CanvaQcEvaluation): Promise<void> {
   if (!(exportRow.content instanceof Uint8Array) || !exportRow.content.length) return;
-  const sourceRow = (await sql<{ content: Uint8Array | null; sha256: string; manifest: { logo?: { x: number; y: number; width: number; height: number } } | null }>`
+  const sourceRow = (await sql<{ content: Uint8Array | null; sha256: string; manifest: { logo?: { x: number; y: number; width: number; height: number }; copy?: unknown; plan?: unknown } | null }>`
     SELECT e.content, e.sha256, e.manifest FROM hawa.canva_editable_sources e
     JOIN hawa.canva_remote_operations o ON o.id = e.operation_id AND o.tenant_id = e.tenant_id AND o.kind = 'create'
     JOIN hawa.canva_bindings g ON g.tenant_id = o.tenant_id AND g.task_id = o.task_id AND g.status = 'bound' AND g.canva_design_id = o.design_id
     WHERE e.tenant_id = ${p.tenantId}::uuid AND e.task_id = ${p.taskId}::uuid
     ORDER BY e.created_at DESC LIMIT 1`.execute(trx)).rows[0];
-  const report = qc.qaReport as CanvaQcEvaluation['qaReport'] & { warnings?: string[]; pictureFidelity?: unknown; textLines?: unknown;
+  const report = qc.qaReport as CanvaQcEvaluation['qaReport'] & { warnings?: string[]; pictureFidelity?: unknown; textLines?: unknown; textShaping?: unknown;
     checks: Array<{ name: string; passed: boolean | null; details?: unknown }> };
   // A source's bytes may live in the file store only (ADR-035's strip): read where they are.
   const store = blobStoreFor(trx);
   const sourceBytes = sourceRow ? await readPreferringStore(store, sourceRow.sha256, sourceRow.content).catch(() => null) : null;
   const source = sourceRow && sourceBytes ? { content: sourceBytes, manifest: sourceRow.manifest } : null;
   await addTextLines(trx, p, exportRow, source?.content ?? null, report, store);
+  addTextShaping(exportRow, source, report);
   if (!source?.content?.length) {
     report.pictureFidelity = { measured: false, code: 'no_editable_source', reason: 'The design was not imported from an editable source; there is nothing to compare its pictures with.' };
     return;
@@ -284,6 +285,28 @@ async function addTextLines(trx: Kysely<Database>, p: { tenantId: string; taskId
   } catch (err) {
     report.textLines = { measured: false, reason: `Not measured: ${err instanceof Error ? err.message : String(err)}` };
     report.checks.push({ name: 'textLines', passed: null, details: 'not measured' });
+  }
+}
+
+/**
+ * ADR-290: whether Canva drew the Kurdish and Arabic copy joined, ordered and wrapped as designed
+ * (`checkExportTextShaping`), on the PNG of the same Canva version, against the transfer plan the design
+ * was imported from. Advisory: recorded and named in the office alert, never part of `passed`.
+ */
+function addTextShaping(exportRow: ExportRow, source: { content: Uint8Array; manifest: unknown } | null,
+  report: { warnings?: string[]; textShaping?: unknown; checks: Array<{ name: string; passed: boolean | null; details?: unknown }> }): void {
+  const why = !source ? 'The design was not imported from an editable source.'
+    : !(exportRow.preview_png instanceof Uint8Array) || !exportRow.preview_png.length ? 'No PNG of the same Canva version was retrieved.' : null;
+  if (why) { report.textShaping = { measured: false, reason: why }; return; }
+  try {
+    const shaping = checkExportTextShaping(Buffer.from(exportRow.preview_png as Uint8Array), source!.manifest, source!.content);
+    report.textShaping = shaping;
+    if ('measured' in shaping) return;
+    report.checks.push({ name: 'textShaping', passed: shaping.pass, details: shaping.blocks.map((b) => ({ id: b.id, verdict: b.verdict, lines: b.lines.length })) });
+    if (shaping.warnings.length) report.warnings = [...(report.warnings ?? []), ...shaping.warnings];
+  } catch (err) {
+    report.textShaping = { measured: false, reason: `Not measured: ${err instanceof Error ? err.message : String(err)}` };
+    report.checks.push({ name: 'textShaping', passed: null, details: 'not measured' });
   }
 }
 
