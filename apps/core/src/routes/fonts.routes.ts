@@ -3,6 +3,7 @@ import {
   KURDISH_SORANI_GLYPH_TABLE,
   packageKurdishWebFont,
   generateKurdishFontFaceCss,
+  isSafeFontFamilyName,
 } from '@hawa/qa';
 import type { RouteContext } from './types.js';
 
@@ -63,6 +64,11 @@ export function registerFontsRoutes(ctx: RouteContext): void {
   // has installed.
   registerRoute('get', '/fonts/cdn/:fontFamily/style.css', (c: any) => {
     const family = c.req.param('fontFamily');
+    // The answer is cached for a year: a name that could close a CSS comment or string is refused.
+    if (typeof family !== 'string' || !isSafeFontFamilyName(family)) {
+      c.header('Cache-Control', 'no-store');
+      return problem(c, 400, 'Invalid Font Family', 'A font family name may hold letters, digits, spaces, underscores, dots and hyphens (at most 64)');
+    }
     const css = generateKurdishFontFaceCss({
       fontFamily: family,
       fontUrl: `/v1/fonts/cdn/${encodeURIComponent(family)}/font.woff2`,
