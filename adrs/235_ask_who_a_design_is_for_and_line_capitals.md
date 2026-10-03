@@ -60,3 +60,18 @@ Timeout (follow-up), 3 Core tests and 1 worker test, all failing before:
 - worker: the timeout settle is scheduled once under its key, an out-of-range delay is refused, and the timeout's notice goes under its own key.
 
 apps/core, apps/worker and packages/integrations: 4,176 passed, 4 skipped. `pnpm typecheck` and `pnpm lint` pass.
+
+## Addendum (2026-10-03, live canary): an organisation the office does not know, named without a reply
+
+The canary answered "Who is this design for?" with "It's for the Erbil Chess Club", without replying to
+the question. Only a known client's name counted as an answer without a reply, so the words were read as
+any message is, passed to the office as "words about a design that is no longer open", and the brief was
+never opened.
+
+A short answer now also counts when it names an organisation the office does not know, if there is a sign
+that it is one: an organisation word (club, ministry, university, union, ... and the Sorani words for them),
+an acronym, or two capitalised words. It opens the kept brief for the office with the existing "couldn't
+match that to an organisation" notice (`unmatched`). Small talk ("hello", "Great", "Good Morning", "wait",
+"Thank You") never counts, however it is capitalised, and a design word or a number still makes the words
+a new brief. `namesUnknownOrganisation` in `lifecycle-client-question.ts`; route test in
+`apps/core/test/client-question-and-line-capitals.test.ts`.

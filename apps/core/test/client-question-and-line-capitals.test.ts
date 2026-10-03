@@ -147,6 +147,25 @@ describe('a brief that names no organisation asks who it is for (ADR-235)', () =
       notice: { text: expect.stringContaining("couldn't match that to an organisation") } });
   });
 
+  it('live 2026-10-03: an organisation nobody knows, named without a reply, still answers the question', async () => {
+    // The canary answered "It's for the Erbil Chess Club" without replying; it was taken as words about an
+    // old design and passed to the office, and the brief was never opened.
+    for (const words of ["It's for the Erbil Chess Club", 'Erbil Chess Club', 'Sulaimani Rotary', 'for my company', 'the UNDP office']) {
+      const chat = outsiderChat();
+      await intake(message(chat, OUTSIDER, TEACHER));
+      const opened = await intake(message(chat, OUTSIDER, words));
+      expect(opened, words).toMatchObject({ lifecycleAction: 'open-request', draft: { clientId: null, autoGenerate: false, rawText: TEACHER },
+        notice: { text: expect.stringContaining("couldn't match that to an organisation") } });
+    }
+    // Small talk is no organisation's name: the question stays open and the brief is not opened.
+    for (const words of ['hello', 'Great', 'Good Morning', 'wait', 'Thank You', 'its for us']) {
+      const chat = outsiderChat();
+      await intake(message(chat, OUTSIDER, TEACHER));
+      const read = await intake(message(chat, OUTSIDER, words));
+      expect(read.lifecycleAction, words).not.toBe('open-request');
+    }
+  });
+
   it('an answer after thirty minutes opens the kept brief for the office, and says it was a while', async () => {
     const chat = outsiderChat();
     await intake(message(chat, OUTSIDER, TEACHER));

@@ -124,6 +124,28 @@ const DONT_KNOW = /^(?:(?:i|we)\s+)?(?:(?:don'?t|do\s+not|dont)\s+know|not\s+sur
 const NAMES_A_DESIGN = /\b(?:poster|flyer|banner|design|invitation|invite|card|post|story|brochure|certificate|announcement|graphic|cover|leaflet|thumbnail|advert)s?\b|پۆستەر|پۆست|دیزاین|بانگهێشت|\p{N}/iu;
 export const saysDontKnow = (text: string) => text.trim().split(/\s+/).length <= 8 && DONT_KNOW.test(text.trim());
 
+/** Words that make a short answer an organisation's name even when the office does not know it. */
+const ORGANISATION_WORD = /\b(?:club|ministry|university|college|school|institute|academy|company|corporation|ltd|group|office|organi[sz]ation|association|foundation|bank|hospital|clinic|cent(?:er|re)|union|council|directorate|department|agency|committee|federation|society|syndicate|church|mosque|municipality|governorate|government|ngo|charity|festival|conference|hotel|restaurant|cafe|store|shop|brand|studio|network)s?\b|زانکۆ|وەزارەت|کۆمپانیا|دامەزراوە|ڕێکخراو|کۆلێژ|قوتابخانە|پەیمانگا|ئەکادیمیا|بانک|نەخۆشخانە|سەنتەر|ناوەند|یەکێتی|ئەنجومەن|بەڕێوەبەرایەتی|فەرمانگە|دەستە|سەندیکا|شارەوانی|پارێزگا|یانە|فیستیڤاڵ|کۆنفرانس|هۆتێل|ئۆفیس/iu;
+/** Chat that is never an organisation's name, however it is capitalised. */
+const SMALL_TALK = /^(?:hi|hey|hello|hiya|salam|salaam|good\s+(?:morning|afternoon|evening|day)|thanks?|thank\s+you|thx|ok(?:ay)?|sure|yes|yeah|yep|no|nope|lol|haha+|wait|hold\s+on|one\s+sec(?:ond)?|sorry|please|great|perfect|cool|nice|fine|alright|got\s+it|noted|understood|done)\b/iu;
+
+/**
+ * ADR-235 addendum (live 2026-10-03): a short answer, sent without a reply right after the question, that
+ * names an organisation the office does not know ("It's for the Erbil Chess Club"). It was read as words
+ * about an old design and passed on, and the brief never opened. An unknown name counts only with a sign
+ * that it is one: an organisation word (club, ministry, university...), an acronym, or two capitalised
+ * words. Small talk never does, so "hello" or "Great" leaves the question open.
+ */
+export function namesUnknownOrganisation(text: string): boolean {
+  const t = text.trim().replace(/[.!]+$/u, '');
+  if (!t || SMALL_TALK.test(t) || NAMES_A_DESIGN.test(t) || !plainClientAnswer(t)) return false;
+  const name = t.replace(/^(?:it'?s|it\s+is|this\s+is|that'?s|that\s+is)\s+/iu, '').replace(/^(?:for|from)\s+/iu, '')
+    .replace(/^(?:the|our|my)\s+/iu, '');
+  if (ORGANISATION_WORD.test(name)) return true;
+  if (/\b\p{Lu}{2,}\b/u.test(name)) return true;
+  return name.split(/\s+/).filter((word) => /^\p{Lu}\p{Ll}/u.test(word)).length >= 2;
+}
+
 /**
  * The organisations an office member is offered by name (active clients, at most twelve), with the short
  * code people use when the name does not carry it: "Kurdistan Accrediting Association for Education (KAAE)".
@@ -151,7 +173,8 @@ export async function readClientAnswer(trx: Tx, tenantId: string, input: { quest
   const clientId = dontKnow ? null : await resolveSourceClient(trx, tenantId, { chatId: question.chatId, words: text });
   // Without a reply, a short answer names the organisation and nothing else: "KAAE poster for Nawroz" is a
   // new brief, read as one, and never taken as the answer.
-  if (!input.repliedToQuestion && !dontKnow && !(clientId && plainClientAnswer(text) && !NAMES_A_DESIGN.test(text))) return null;
+  if (!input.repliedToQuestion && !dontKnow && !(clientId && plainClientAnswer(text) && !NAMES_A_DESIGN.test(text))
+    && !(!clientId && namesUnknownOrganisation(text))) return null;
   const late = (input.now ?? Date.now()) - Date.parse(question.askedAt) > CLIENT_QUESTION_MS || question.askRules !== CLIENT_QUESTION_RULES;
   if (late) return { outcome: 'expired' };
   if (clientId) return { outcome: 'client', clientId };
