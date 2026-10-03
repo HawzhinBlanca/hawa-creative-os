@@ -3,6 +3,7 @@ import {
   imagePixelSize,
   loadOfficeLibraryPhoto,
   officePhotoClientDir,
+  officePhotoExclusions,
   officePhotoLibraryRoot,
   readOfficePhotoLibrary,
   selectOfficeLibraryPhotos,
@@ -104,6 +105,12 @@ async function loadRecorded(clientDir: string, library: OfficePhotoLibrary, phot
   for (const p of photos) {
     const entry = library.photos.find((e) => e.id === p.id && e.storedSha256 === p.storedSha256);
     if (!entry) throw new Error(`OFFICE_PHOTO_UNAVAILABLE: ${p.id} is no longer in the library as it was chosen`);
+    // The rules are applied again on every load, not only when the photo was chosen: a photo the office
+    // has since taken back (consent withdrawn, marked not usable) leaves the run and its revisions.
+    const withdrawn = [...new Set([...officePhotoExclusions(entry), ...entry.excludedReasons])];
+    if (withdrawn.length || entry.status !== 'usable') {
+      throw new Error(`OFFICE_PHOTO_UNAVAILABLE: ${p.id} may no longer be used (${withdrawn.join(', ') || 'excluded_by_office'})`);
+    }
     const { bytes } = await loadOfficeLibraryPhoto(clientDir, entry);
     out.push(contentPhoto(entry, bytes));
   }

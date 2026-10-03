@@ -221,3 +221,49 @@ describe('the requester\'s note (ADR-280)', () => {
     expect(requesterDraftNotes(run(false) as never).join('\n')).toMatch(/Send a larger version/);
   });
 });
+
+describe('a photo the office takes back (hunt-3)', () => {
+  // The office withdraws a photo after a run chose it (consent refused, or marked not usable). The
+  // run's later stages and any revision reloaded it by id and hash alone, so it stayed on the design.
+  async function libraryWith(row: string) {
+    const dir = tmp('olp-revoke-');
+    const source = tmp('olp-revoke-src-');
+    writeFileSync(path.join(source, 'visit.png'), visitPhoto);
+    const header = 'source,subjects,events,people,consent,usable';
+    await ingestOfficePhotoFolder({ sourceDir: source, libraryRoot: dir, clientId: CLIENT,
+      tagRows: parseOfficePhotoTagSheet(`${header}\nvisit.png,school,field visit,yes,granted,yes`, 'csv') });
+    const revoke = async () => ingestOfficePhotoFolder({ sourceDir: source, libraryRoot: dir, clientId: CLIENT,
+      tagRows: parseOfficePhotoTagSheet(`${header}\n${row}`, 'csv') });
+    return { dir, revoke };
+  }
+
+  it.each([
+    ['consent withdrawn', 'visit.png,,,,not_granted,'],
+    ['marked not usable', 'visit.png,,,,,no'],
+  ])('%s: a later stage of the run does not reload it', async (_name, row) => {
+    const { dir, revoke } = await libraryWith(row);
+    const stages = stagesWithBrief();
+    await attachOfficeLibraryPhotos(context(), stages, input({ env: ON(dir) }));
+    expect((stages.officePhotoLibrary as OfficeLibraryRunRecord).status).toBe('attached');
+    await revoke();
+    const later = context();
+    await attachOfficeLibraryPhotos(later, stages, input({ status: 'laying_out', env: ON(dir) }));
+    expect(later.photos).toBeUndefined();
+    expect(later.photoSelection).toBeUndefined();
+    expect(stages.officePhotoLibrary).toMatchObject({ status: 'unavailable', reason: expect.stringMatching(/may no longer be used/) });
+  });
+
+  it('a revision does not inherit a photo whose consent was withdrawn', async () => {
+    const { dir, revoke } = await libraryWith('visit.png,,,,not_granted,');
+    const parentStages = stagesWithBrief();
+    await attachOfficeLibraryPhotos(context(), parentStages, input({ env: ON(dir) }));
+    const parent = parentStages.officePhotoLibrary as OfficeLibraryRunRecord;
+    expect(parent.status).toBe('attached');
+    await revoke();
+    const ctx = context();
+    const stages: Record<string, any> = {};
+    await attachOfficeLibraryPhotos(ctx, stages, input({ env: ON(dir), request: { directed: { parentTaskId: 'p' } }, parentRecord: async () => parent }));
+    expect(ctx.photos).toBeUndefined();
+    expect(stages.officePhotoLibrary).toMatchObject({ status: 'unavailable', inheritedFromParent: true });
+  });
+});
