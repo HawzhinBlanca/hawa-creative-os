@@ -221,10 +221,11 @@ describe('F4: an opinion about the design, before any draft exists, goes to the 
     for (const words of ['the poster looks cheap', "I don't like it", 'this design is too plain', 'دیزاینەکە ناشیرینە'])
       expect(plan(words, [view('a', 'manual', 1)]), words).toMatchObject({ kind: 'note', note: 'change', requestId: 'a', feedback: true });
     // A draft exists (the office sent it back for the requester's changes), two requests are open, or a draft is
-    // being made: the question stays.
-    expect(plan('the poster looks cheap', [view('a', 'manual', 3)])).toMatchObject({ kind: 'ask' });
-    expect(plan('the poster looks cheap', [view('a', 'manual', 1), view('b', 'manual', 1)])).toMatchObject({ kind: 'ask' });
-    expect(plan('the poster looks cheap', [view('a', 'designing', 1)])).toMatchObject({ kind: 'ask' });
+    // being made: it is not the designer's note. Conversation fuzz (2026-10-03): nor is it asked "Is this a change to …, or
+    // a new design?" any more; the chat answer passes the unhappiness to the office and asks what to change (ADR-252).
+    expect(plan('the poster looks cheap', [view('a', 'manual', 3)])).toEqual({ kind: 'conversation' });
+    expect(plan('the poster looks cheap', [view('a', 'manual', 1), view('b', 'manual', 1)])).toEqual({ kind: 'conversation' });
+    expect(plan('the poster looks cheap', [view('a', 'designing', 1)])).toEqual({ kind: 'conversation' });
     // A brief of its own, or a subject of its own, is not an opinion of this design.
     expect(plan('Book Fair poster, 9 November at 10 am', [view('a', 'manual', 1)])).not.toMatchObject({ feedback: true });
     expect(plan('the Nawroz one looks cheap', [view('a', 'manual', 1)])).not.toMatchObject({ feedback: true });

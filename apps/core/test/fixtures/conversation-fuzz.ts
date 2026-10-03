@@ -42,17 +42,18 @@ import { Play, frictionIssues } from './conversation-script.js';
 
 // --- the ratchet ---------------------------------------------------------------------------------------------
 /**
- * Pinned on 2026-10-03 on `claude/release-3` @ b56020bf (live): the 320 conversations broke the invariants 69 times (J1 11,
- * J2 41, J3 15, J4 0, J5 2, J6 0, J7 0; report: output/research/2026-10-03-conversation-fuzz/REPORT.md). Each shard holds
- * its own conversations to these totals. Lower them when a fix lands; never raise them.
+ * Pinned on 2026-10-03. On `claude/release-3` @ b56020bf (live) the 320 conversations broke the invariants 69 times: J1 11,
+ * J2 41, J3 15, J4 0, J5 2, J6 0, J7 0 (report: output/research/2026-10-03-conversation-fuzz/REPORT.md). The fixes on
+ * `claude/convfuzz` (ADR-284 addendum "conversation fuzz") took every count to zero. Each shard holds these counts for its
+ * own conversations; lower them when a fix lands, never raise them.
  */
-export const CONVERSATION_FUZZ_BASELINE = { total: 69, J1: 11, J2: 41, J3: 15, J4: 0, J5: 2, J6: 0, J7: 0 };
+export const CONVERSATION_FUZZ_BASELINE = { total: 0, J1: 0, J2: 0, J3: 0, J4: 0, J5: 0, J6: 0, J7: 0 };
 /**
- * Friction the invariants do not name, measured the same way: an opinion asked "Is this a change to …, or a new
- * design?" (35), "I don't have a design in progress" said while a brief waits for "who is it for?" (8), and a message
- * left with no reply (0). A change asked "which design?" with two designs open is right, and is not counted.
+ * Friction the invariants do not name, held where the same fixes left it: an opinion asked "Is this a change to …, or a
+ * new design?" (35 before), "I don't have a design in progress" said while a brief waits for "who is it for?" (8
+ * before), and a message left with no reply (0 before). A change asked "which design?" with two designs open is right.
  */
-export const CONVERSATION_FUZZ_FRICTION = { opinionAskedChangeOrNew: 35, nothingInProgressWhileBriefWaits: 8, noReply: 0 };
+export const CONVERSATION_FUZZ_FRICTION = { opinionAskedChangeOrNew: 0, nothingInProgressWhileBriefWaits: 0, noReply: 0 };
 
 // --- deterministic generation --------------------------------------------------------------------------------
 const SEED = 20261004;

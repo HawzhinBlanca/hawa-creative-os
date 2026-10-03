@@ -50,11 +50,20 @@ const HARVEST = view('A', 'manual', HARVEST_TITLE, 6);
 const CHESS = view('B', 'manual', CHESS_TITLE, 5);
 const TWO = [HARVEST, CHESS];
 
+// Conversation fuzz (2026-10-03, J2): a cancel that names its designs together is asked about once, naming them all
+// ("Do you want me to cancel both … and …?"); "yes" cancels them all. Before, it withdrew them at once.
+const bothAsked = (words: string, every: 'both' | 'all', ids: string[]) =>
+  ({ kind: 'ask', intent: 'cancel', words, allowNew: false, every, options: ids.map((requestId) => ({ requestId })) });
+const yesTo = (words: string, ids: string[], every: 'both' | 'all' = 'both'): PendingAsk => ({ updateId: 21, intent: 'cancel', words, allowNew: false, every,
+  options: ids.map((requestId) => ({ requestId, title: requestId === 'A' ? HARVEST_TITLE : requestId === 'B' ? CHESS_TITLE : 'KAAE: Book Week' })) });
+
 describe('item 1: cancel words that name the designs together cancel them all', () => {
   it('the live words are a cancel of both, never "A new design"', () => {
     expect(readIntentByRules(LIVE_BOTH)).toMatchObject({ intent: 'cancel', every: 'both' });
     expect(readIntentByRules(LIVE_BOTH).bareCancel).toBeUndefined();
-    expect(planTurn(input(LIVE_BOTH, TWO))).toEqual({ kind: 'cancel-all', requestIds: ['A', 'B'], words: LIVE_BOTH });
+    expect(planTurn(input(LIVE_BOTH, TWO))).toMatchObject(bothAsked(LIVE_BOTH, 'both', ['A', 'B']));
+    expect(planTurn(input('yes', TWO, { pendingAsk: yesTo(LIVE_BOTH, ['A', 'B']) })))
+      .toEqual({ kind: 'cancel-all', requestIds: ['A', 'B'], words: LIVE_BOTH, resolves: 21 });
   });
 
   it.each([
@@ -69,16 +78,19 @@ describe('item 1: cancel words that name the designs together cancel them all', 
     ['هەموویان هەڵبوەشێنەوە', 'all'],
   ] as const)('"%s" cancels every design it names (%s)', (words, every) => {
     expect(readIntentByRules(words)).toMatchObject({ intent: 'cancel', every });
-    expect(planTurn(input(words, TWO))).toMatchObject({ kind: 'cancel-all', requestIds: ['A', 'B'] });
+    expect(planTurn(input(words, TWO))).toMatchObject(bothAsked(words, every, ['A', 'B']));
+    expect(planTurn(input('yes', TWO, { pendingAsk: yesTo(words, ['A', 'B'], every) }))).toMatchObject({ kind: 'cancel-all', requestIds: ['A', 'B'], resolves: 21 });
   });
 
   it('said as a reply to one design\'s message, "both" still means both', () => {
-    expect(planTurn(input(LIVE_BOTH, TWO, { bound: ['B'] }))).toMatchObject({ kind: 'cancel-all', requestIds: ['A', 'B'] });
+    expect(planTurn(input(LIVE_BOTH, TWO, { bound: ['B'] }))).toMatchObject(bothAsked(LIVE_BOTH, 'both', ['A', 'B']));
   });
 
   it('"all of them" is every open design; "both" of three is asked about, without "A new design"', () => {
     const three = [...TWO, view('C', 'designing', 'KAAE: Book Week', 4)];
-    expect(planTurn(input('cancel all of them', three))).toMatchObject({ kind: 'cancel-all', requestIds: ['A', 'B', 'C'] });
+    expect(planTurn(input('cancel all of them', three))).toMatchObject(bothAsked('cancel all of them', 'all', ['A', 'B', 'C']));
+    expect(planTurn(input('yes', three, { pendingAsk: yesTo('cancel all of them', ['A', 'B', 'C'], 'all') })))
+      .toMatchObject({ kind: 'cancel-all', requestIds: ['A', 'B', 'C'], resolves: 21 });
     const asked = planTurn(input(LIVE_BOTH, three));
     expect(asked).toMatchObject({ kind: 'ask', intent: 'cancel', allowNew: false });
     if (asked.kind !== 'ask') throw new Error('expected a question');
@@ -86,12 +98,13 @@ describe('item 1: cancel words that name the designs together cancel them all', 
   });
 
   it('one design approved: both are named; the request objects withdraw one and tell the other too late', () => {
-    expect(planTurn(input(LIVE_BOTH, [HARVEST, view('B', 'approved', CHESS_TITLE, 5, 3)])))
-      .toMatchObject({ kind: 'cancel-all', requestIds: ['A', 'B'] });
+    const approved = [HARVEST, view('B', 'approved', CHESS_TITLE, 5, 3)];
+    expect(planTurn(input(LIVE_BOTH, approved))).toMatchObject(bothAsked(LIVE_BOTH, 'both', ['A', 'B']));
+    expect(planTurn(input('yes', approved, { pendingAsk: yesTo(LIVE_BOTH, ['A', 'B']) }))).toMatchObject({ kind: 'cancel-all', requestIds: ['A', 'B'] });
   });
 
-  it('with only one design in the chat, "cancel both of them" cancels that one, as any cancel does', () => {
-    expect(planTurn(input(LIVE_BOTH, [HARVEST]))).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'A' });
+  it('with only one design in the chat, "cancel both of them" is asked about that one, as any cancel is', () => {
+    expect(planTurn(input(LIVE_BOTH, [HARVEST]))).toMatchObject({ kind: 'ask', intent: 'cancel', options: [{ requestId: 'A' }] });
   });
 
   it('words the rules cannot place ask one question naming both; "yes" cancels both, "no" keeps them', () => {
@@ -172,11 +185,11 @@ describe('item 2: "both" and "all of them" answer "which design?"', () => {
 
 describe('item 3: "and … too" does not make a named cancel uncertain', () => {
   it.each([LIVE_TOO, 'also cancel the Chess Club flyer as well', 'cancel the Chess Club flyer too please', 'and also cancel the chess club one too'])(
-    '"%s" cancels Chess Club at once', (words) => {
+    '"%s" names Chess Club, and is asked about it alone (J2)', (words) => {
       const reading = readIntentByRules(words);
       expect(reading).toMatchObject({ intent: 'cancel' });
       expect(reading.bareCancel).toBeUndefined();
-      expect(planTurn(input(words, TWO))).toMatchObject({ kind: 'note', note: 'cancel', requestId: 'B' });
+      expect(planTurn(input(words, TWO))).toMatchObject({ kind: 'ask', intent: 'cancel', allowNew: false, options: [{ requestId: 'B' }] });
     });
 
   it.each(['and never mind', 'also stop', 'stop too'])('"%s" names nothing, and is still asked about (ADR-251)', (words) => {
@@ -230,6 +243,12 @@ const message = (chat: number, text: string) => {
   return { update_id: id, message: { message_id: id % 100000, from: { id: REQUESTER, is_bot: false, first_name: 'Sewa' },
     chat: { id: chat, type: 'private' }, date: 1790000000, text } };
 };
+/** The requester's next message, sent right after `prev` (a later update). */
+const after = (prev: { update_id: number; message: { chat: { id: number } } }, text: string) => {
+  const id = prev.update_id + 1;
+  return { update_id: id, message: { message_id: id % 100000, from: { id: REQUESTER, is_bot: false, first_name: 'Sewa' },
+    chat: { id: prev.message.chat.id, type: 'private' }, date: 1790000000, text } };
+};
 const app = () => createApp({ db, requesterIntentModel: null } as any);
 const intake = async (update: unknown) => {
   const res = await app().request('/v1/internal/telegram/intake', { method: 'POST',
@@ -279,13 +298,20 @@ const stageOf = async (requestId: string) => (await withRlsContext(db, scope, (t
   .where('request_id', '=', requestId).executeTakeFirstOrThrow())).stage;
 
 describe('the live chat, as the requester wrote it', () => {
-  it('"please cancel both of them, we don\'t need them" withdraws both designs, each told plainly', async () => {
+  it('"please cancel both of them, we don\'t need them" asks once about both; "yes" withdraws both, each told plainly', async () => {
     const chat = chatId();
     const harvest = await seed(chat, HARVEST_TITLE);
     const chess = await seed(chat, CHESS_TITLE);
-    const cancel = message(chat, LIVE_BOTH);
+    // Conversation fuzz (2026-10-03, J2): asked first, naming both; nothing is withdrawn on the cancel words.
+    const words = message(chat, LIVE_BOTH);
+    const asked = await intake(words);
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true });
+    expect(asked.chatAnswer.text).toBe('Do you want me to cancel both <b>Harvest Fair (1/2)</b> and <b>Chess Club (2/2)</b>?');
+    expect([await stageOf(harvest.requestId), await stageOf(chess.requestId)]).toEqual(['manual', 'manual']);
+    const cancel = after(words, 'yes');
     const decided = await intake(cancel);
-    expect(decided).toMatchObject({ lifecycleAction: 'withdraw', intent: 'cancel', requestIds: [harvest.requestId, chess.requestId] });
+    // The intent is the reading of "yes" (an answer); the plan it resolves is the cancel.
+    expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestIds: [harvest.requestId, chess.requestId] });
     expect(decided.requestId).toBe(harvest.requestId);
     expect(decided.chatAnswer).toBeUndefined();
     const told: string[] = [];
@@ -320,11 +346,14 @@ describe('the live chat, as the requester wrote it', () => {
     }
   });
 
-  it('"and cancel the Chess Club flyer too" withdraws Chess Club at once, and only it', async () => {
+  it('"and cancel the Chess Club flyer too" asks about Chess Club; "yes" withdraws it, and only it', async () => {
     const chat = chatId();
     const harvest = await seed(chat, HARVEST_TITLE);
     const chess = await seed(chat, CHESS_TITLE);
-    const cancel = message(chat, LIVE_TOO);
+    const words = message(chat, LIVE_TOO);
+    const asked = await intake(words);
+    expect(asked.chatAnswer.text).toBe('Do you want me to cancel <b>Chess Club (2/2)</b>?');
+    const cancel = after(words, 'yes');
     const decided = await intake(cancel);
     expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId: chess.requestId });
     expect(decided.requestIds).toBeUndefined();
@@ -337,7 +366,9 @@ describe('the live chat, as the requester wrote it', () => {
     const chat = chatId();
     const harvest = await seed(chat, HARVEST_TITLE);
     const chess = await seed(chat, CHESS_TITLE, 'approved', 3);
-    const cancel = message(chat, 'cancel both of them');
+    const words = message(chat, 'cancel both of them');
+    expect(await intake(words)).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true });
+    const cancel = after(words, 'yes');
     expect(await intake(cancel)).toMatchObject({ lifecycleAction: 'withdraw', requestIds: [harvest.requestId, chess.requestId] });
     const first = requestObject(harvest.state);
     expect(await recordWithdraw(first.ctx, first.core, withdraw(harvest.requestId, cancel.update_id))).toMatchObject({ accepted: true });
