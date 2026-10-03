@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-03T15:57:22+03:00",
+  "generatedAt": "2026-10-03T17:20:53+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "cf88cf02aa68a15134722802e670d711b4c498b9",
+    "commit": "bcff4cffd8c29a573c8c0fea7b99d88b14dc2c8f",
     "treeClean": true,
-    "commitTimestamp": "2026-10-03T15:57:22+03:00",
+    "commitTimestamp": "2026-10-03T17:20:53+03:00",
     "branch": "codex/hawzhin-app-integration"
   },
   "migrations": {
@@ -70,9 +70,9 @@
       "image": "gpt-image-2.5-sunburst"
     },
     "runtimeOverrides": "unobserved",
-    "promptVersion": "2026-09-25.2",
+    "promptVersion": "2026-10-03.1",
     "promptSourcesSha256": {
-      "apps/core/src/services/design-studio/prompts.ts": "c089e3d5630cfaed7ad47fbd17fe49af3785bb508488979ff7f3a937316bbe44",
+      "apps/core/src/services/design-studio/prompts.ts": "c1cd2a1cb09d824cf74eb73b584c1cf37a4b41ba7b82e9c910fac041717b3d47",
       "apps/core/src/services/canva-design-planner.ts": "f913252c64ef050e57b84ceb79ff65fbbeb94d580eb47e541441728a2f000ed2",
       "packages/creative/src/studio/layout-generator-v3.ts": "b2fec55a85e5e1818bd8e16c33172c5c5092bdcd09d01b17d78ac6a632c8276a",
       "packages/creative/src/studio/pairwise-judge-v3.ts": "a696d3e2258e9ff95fe347ebc0127980ac7b59dc67fa858b134d2e724d4557f1",
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "8b392aa93a82cecc4818aed283ac05e71f2d4ba083b2dec1a21243f1c9cc3bbb"
+  "sha256": "18deb0851495c7e1f8751d153882f6f5f6d704fc7535a488d866006dae9048ae"
 }
