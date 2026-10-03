@@ -802,11 +802,26 @@ export function withoutClientPossessive(headline: string, names: readonly string
  * "KAAE: Assessment Literacy Workshop": the client's name once, the headline cut only when long. When
  * the label is the client's (`clientLabel`), a headline that starts with its possessive ("KAAE's …") is
  * titled "KAAE: …" (ADR-253); a sender's name as the label is left as it was ("Sara's Bakery").
+ *
+ * ADR-284 addendum (brief phrasing fuzz: copy classes, lead's follow-up): a headline that names nothing (only the
+ * words that introduce the copy, "With these details", or a list mark; or `titleName` leaves nothing of it) is titled
+ * by the next copy line that names something (`next`), so a title is never only "KAAE: ". With none, the label alone.
  */
-export function copyTitle(headline: string, label: string, clientLabel = false): string {
-  const said = ws(stripLeadingMarks(headline));
-  // ADR-284 addendum (live canary 2026-10-03): the name without the date, time and place said after it.
-  const line = titleName((clientLabel && label && afterPossessive(said, label)) || said, 60);
+const ONLY_A_LEAD_IN = new RegExp(`^(?:${DETAILS_TAIL}|for\\s+this[\\s:]*)$`, 'iu');
+const namesNothing = (text: string) => !/[\p{L}\p{N}]/u.test(text) || ONLY_A_LEAD_IN.test(text.trim());
+export function copyTitle(headline: string, label: string, clientLabel = false, next: readonly string[] = []): string {
+  const named = (said: string) => {
+    if (namesNothing(said)) return '';
+    // ADR-284 addendum (live canary 2026-10-03): the name without the date, time and place said after it.
+    const name = titleName((clientLabel && label && afterPossessive(said, label)) || said, 60);
+    return namesNothing(name) ? '' : name;
+  };
+  let line = '';
+  for (const candidate of [headline, ...next]) {
+    line = named(ws(stripLeadingMarks(candidate).replace(/^\s*[-*•·–—]\s+/u, '')));
+    if (line) break;
+  }
+  if (!line) return label;
   const cut = line.length <= 60 ? line : `${line.slice(0, 57).replace(/\s+\S*$/u, '') || line.slice(0, 57)}…`;
   return label && !startsWithName(line, label) ? `${label}: ${cut}` : cut;
 }
@@ -902,7 +917,7 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
     ...(ledger !== undefined ? { ledgerUpdateId: ledger } : {}) };
   return {
     ...kept,
-    title: copyTitle(headline, label, Boolean(clientName)),
+    title: copyTitle(headline, label, Boolean(clientName), lines),
     ...(isArabic(headline) ? { headlineCkb: headline } : { headlineEn: headline }),
     copyEn: lines.filter((l) => !isArabic(l)).join('\n'),
     copyCkb: lines.filter(isArabic).join('\n'),

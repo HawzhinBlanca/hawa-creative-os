@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { createDb } from '@hawa/db';
 import { createApp } from '../src/app.js';
 import type { ChatIntake } from '../src/services/chat-intake.js';
-import { closingStart, extractRequestCopy } from '../src/services/request-copy-extraction.js';
+import { closingStart, copyTitle, extractRequestCopy } from '../src/services/request-copy-extraction.js';
 
 /**
  * Brief phrasing fuzz, the copy classes (ADR-284 addendum "brief phrasing fuzz: copy classes", 2026-10-03). The fuzz
@@ -200,6 +200,18 @@ describe('the copy reader alone (no route)', () => {
     autoGenerate: true } as ChatIntake);
   const printed = async (words: string) => ((await extractRequestCopy(prepared(words), { model: null, tenantId: 't', updateId: 1,
     senderName: 'Requester' })).exactCopy as Array<{ text: string }>).map((b) => b.text);
+
+  it('a headline that names nothing is titled by the next copy line, never only "KAAE: "', () => {
+    expect(copyTitle('With these details', 'KAAE', true, ['Nawroz Celebration', '3rd of December'])).toBe('KAAE: Nawroz Celebration');
+    expect(copyTitle('with this text:', 'KAAE', true, ['- Research Day'])).toBe('KAAE: Research Day');
+    expect(copyTitle('', 'KAAE', true, ['', 'Open Day'])).toBe('KAAE: Open Day');
+    expect(copyTitle('- ', 'Sewa', false, ['Spring Concert'])).toBe('Sewa: Spring Concert');
+    // Nothing names it: the label alone, never "KAAE: ".
+    expect(copyTitle('With these details', 'KAAE', true)).toBe('KAAE');
+    // A headline that names something keeps its title; the next lines are not read.
+    expect(copyTitle('Book Fair', 'KAAE', true, ['5 November'])).toBe('KAAE: Book Fair');
+    expect(copyTitle('Details Day', 'KAAE', true, ['5 November'])).toBe('KAAE: Details Day');
+  });
 
   it('a bare "want a …" at the start of a brief asks for the design (class 10)', async () => {
     expect(await printed('want a KAAE flyer for the Science Camp on 20 March 2027')).toEqual(['Science Camp on 20 March 2027']);
