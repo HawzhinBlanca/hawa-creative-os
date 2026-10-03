@@ -185,7 +185,8 @@ Two further facts shaped the design:
   the public Desk, with the new `CANVA_REDIRECT_URI`.
 - **Open:** there is no supported command to enrol an office Google subject (ADR-064 bootstrap). The
   customer-account administration needs a Google-signed-in named administrator, so it is blocked
-  until a reviewed bootstrap exists. No ad-hoc SQL on production.
+  until a reviewed bootstrap exists. No ad-hoc SQL on production. *Resolved by the 2026-10-03 addendum
+  below (`HAWA_GOOGLE_OIDC_ALLOWED_EMAILS`, migration 090).*
 - **Open:** the watchdog does not watch cloudflared. The outside heartbeat is the only alert when the
   Mac is off.
 
@@ -212,3 +213,97 @@ All of these ran on 2026-10-03 on this branch:
   run, apply, idempotent rerun, port change, existing tunnel, refused DNS, stop), and the template
   read by the real cloudflared offline.
 - `nginx -t` in `nginx:1.27-alpine-slim`, and `docker compose config` with the new ports.
+
+## Addendum (2026-10-03): office Google enrolment from an allow-list
+
+**Status:** Implemented on branch `claude/golive`, with migration 090. Not deployed.
+
+### Context
+
+The Consequences above leave one item open: nothing could enrol an office Google account. Core admitted
+a Google identity only if 036's `hawa.lookup_office_oidc_user` found a member with that subject.
+`hawa.users` forces RLS and has only a read policy, so the application role cannot create a member or
+record a subject. The only database function that inserts users (083's
+`provision_customer_requester`) makes customer requesters. Also, only Workspace accounts with an `hd`
+claim in `HAWA_GOOGLE_OIDC_HOSTED_DOMAINS` were admitted, and the office may use plain Gmail accounts.
+
+### Decision
+
+1. **`HAWA_GOOGLE_OIDC_ALLOWED_EMAILS`** is a comma list of `email:role[+role…]`. The roles are
+   `hawa.membership_role` without `requester`. Parsing is strict: a bad email, an unknown role, an
+   empty entry, a repeated email or a repeated role throws, and Core does not start. Emails are
+   compared lower-cased. `HOSTED_DOMAINS` becomes optional when the list is set. `googleOidcSettings`
+   still returns null for an incomplete configuration, and the new key counts towards
+   `namedOfficeReviewMode`. The `hd` hint is sent only when there is no list, because it would hide
+   Gmail accounts in Google's chooser.
+2. **Admission** (`officeIdentityFromClaims`), after openid-client has verified the token:
+   - `email_verified === true` is required in every case.
+   - A listed email is admitted with its roles, with or without `hd`.
+   - Any other account needs an `hd` in `HOSTED_DOMAINS`, and goes through the unchanged subject lookup.
+3. **Migration 090** adds two `SECURITY DEFINER` functions in 036's style. Execute is revoked from
+   PUBLIC and granted to `hawa_app`, and both refuse any context other than Core's system automation
+   in the current tenant.
+   - `hawa.enrol_office_oidc_user(tenant, subject, email, name, roles)` is serialised per subject. It:
+     - finds the member by subject;
+     - otherwise binds the subject to an unbound member with that email, refusing built-in identities
+       and refusing (23505 → 403) an email bound to another subject;
+     - otherwise creates the member;
+     - sets the tenant memberships to exactly the listed roles;
+     - records the enrolment in `hawa.office_oidc_enrolments`, a new table that has no policy or grant
+       and is reached only through these functions;
+     - writes an `office_oidc.enrolled`, `.bound`, `.roles_changed` or `.reinstated` audit event;
+     - revokes the member's Desk sessions when its roles change.
+   - `hawa.reconcile_office_oidc_enrolments(tenant, list)` takes the whole current list. It revokes
+     every enrolled member whose email is no longer listed: its memberships go inactive, its Desk
+     sessions are revoked, its enrolment is marked revoked, and an `office_oidc.revoked` audit event
+     is written. It also re-syncs changed roles. The subject binding is kept.
+4. **When the list is applied.** Core runs the reconciliation at start whenever Google sign-in is
+   configured. It runs it again before every callback, and the callback fails closed (503) if it
+   cannot. Removing an email therefore takes effect on the redeploy that changes the list: live
+   sessions end within the 60-second session recheck, and new sign-ins are refused, even through a
+   Workspace domain. An empty or removed list revokes every account it enrolled.
+5. **Customer accounts.** An allow-listed `administrator` gets a `google_oidc` session for a member with
+   an active administrator membership. That is what `lock_named_office_administrator` (038) requires,
+   so `/v1/office/customer-accounts` works without any change to the customer routes.
+
+### Considered and rejected
+
+- **Reusing the seeded Administrator row.** Every Google admin would be the same user as the shared-key
+  administrator, which undoes ADR-064's named review.
+- **Provisioning through `provision_customer_requester` with a derived subject.** It would label office
+  administrators as customers, with a fake customer email.
+- **Owner-run SQL**, like 012. That is the ad-hoc production SQL this go-live forbids.
+- **Admitting any verified email without a list.** Anyone with a Google account would get a session.
+
+### Consequences
+
+- For an enrolled account, the list is the whole of its tenant role. Roles granted any other way are
+  deactivated at its next sign-in.
+- There is no supported unbind. If an allow-listed email's Google account is deleted and recreated, the
+  new subject is refused, and the lead has to reset it through a reviewed migration.
+- For a non-Gmail address, `email_verified` means Google verified the address when the account was
+  made. Binding at first sign-in means a later account with the same address and a new subject is
+  refused.
+
+### Evidence
+
+`apps/core/test/google-oidc-allowed-emails.test.ts` (11 tests, real test PostgreSQL). Google is mocked
+only at the openid-client boundary; the real provider, admission, routes and migration-090 functions
+run. It covers:
+
+- strict parsing, and the start-up refusal of a malformed list;
+- optional hosted domains, and the incomplete-configuration refusal;
+- a Gmail administrator's first sign-in creating the member, the session and the audit event, then
+  `GET /v1/office/customer-accounts` answering 200;
+- a second sign-in matching the same subject;
+- an operator refused customer administration;
+- refusals for an unverified email, a string `"true"` for email_verified, an unlisted Gmail, and a
+  listed email under another subject;
+- the Workspace path unchanged, with and without the list;
+- a role change re-syncing the roles and revoking the old session;
+- removal revoking the memberships and the live session while keeping the binding, Workspace
+  re-entry refused, and re-listing reinstating the member;
+- the functions refused outside system automation, and the enrolment table unreadable by `hawa_app`.
+
+Two deliberate faults were each caught by the suite: reconciliation stubbed out, and the
+`email_verified` check weakened.

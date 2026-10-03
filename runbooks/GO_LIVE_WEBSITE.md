@@ -26,11 +26,10 @@ never into chat, commits or evidence.
   `X-Hawa-Public-Gateway` refusal in Core and `scripts/verify_public_gateway.ts`. Before any deploy,
   check `readlink ~/.hawa/current`, because Codex deploys too
   (`runbooks/PRODUCTION_RELEASE_DIRECTORIES.md`).
-- Migrations through 089 are applied in production (the customer tables 083–087 included).
-- **Open blocker, no tool in this release:** office Google accounts have to be enrolled by subject
-  (step L4). Until a reviewed bootstrap path exists, Google sign-in admits nobody. The customer-account
-  administration (step L6) needs a Google-signed-in named administrator. Do not run ad-hoc SQL on
-  production to work around this.
+- Migrations through 090 are applied in production (the customer tables 083–087 included, and 090,
+  the office Google enrolment functions).
+- Office Google accounts are enrolled from `HAWA_GOOGLE_OIDC_ALLOWED_EMAILS` (step L4, ADR-294
+  addendum). Do not run ad-hoc SQL on production to enrol anyone.
 
 ## Owner steps
 
@@ -72,20 +71,31 @@ cloudflared tunnel login        # a browser opens: choose the hawzhin.app zone
 
 *Check:* `~/.cloudflared/cert.pem` exists. It is an account credential: never copy it anywhere.
 
-**O5. Create the Google OAuth client for the Desk.** In the Google Cloud console for the office's
-Google Workspace:
+**O5. Create the Google OAuth client for the Desk.** In the Google Cloud console (any project the
+owner controls):
 
-1. Set the OAuth consent screen's user type to **Internal**.
+1. Set the OAuth consent screen's user type:
+   - **External** if any office account is a plain Gmail (or other non-Workspace) account. Leave the
+     app in *Testing* and add every office email as a **test user**: the same emails as in
+     `HAWA_GOOGLE_OIDC_ALLOWED_EMAILS`. Scopes are only `openid`, `email` and `profile`, so no Google
+     verification is needed. (In *Testing*, Google asks each user to sign in again after 7 days; this
+     only affects Google's own consent, not Hawa's 8-hour sessions.)
+   - **Internal** if every office account is in the office's Google Workspace.
 2. Create the client under *Credentials → Create credentials → OAuth client ID*:
    - Application type: **Web application**
    - Name: Hawa Desk
    - Authorized JavaScript origins: `https://desk.hawzhin.app`
    - Authorized redirect URIs: `https://desk.hawzhin.app/auth/google/callback`
-3. Note the Workspace domain or domains whose accounts may sign in (the hosted domain).
+3. Write the list of office accounts and their roles as `email:role` entries, comma-separated, for
+   example `owner@gmail.com:administrator,designer@gmail.com:operator+approver`. The owner's own
+   account must be `administrator` (step L6 needs it). Roles: administrator, approver, operator,
+   designer, language_reviewer, client_dna_manager, model_evaluator, auditor. Write each email exactly
+   as Google shows it for the account.
+4. Optionally, the Workspace domain or domains whose already-provisioned accounts may sign in.
 
-Give the lead the client ID, the client secret and the domain or domains through the secret path. The
-lead turns them into `HAWA_GOOGLE_OIDC_CLIENT_ID`, `HAWA_GOOGLE_OIDC_CLIENT_SECRET` and
-`HAWA_GOOGLE_OIDC_HOSTED_DOMAINS`.
+Give the lead the client ID, the client secret, the account list and any domain through the secret
+path. The lead turns them into `HAWA_GOOGLE_OIDC_CLIENT_ID`, `HAWA_GOOGLE_OIDC_CLIENT_SECRET`,
+`HAWA_GOOGLE_OIDC_ALLOWED_EMAILS` and (optionally) `HAWA_GOOGLE_OIDC_HOSTED_DOMAINS`.
 
 **O6. Add the Canva redirect.** In the Canva developer portal, add this authorized redirect to the Hawa
 integration: `https://desk.hawzhin.app/v1/integrations/canva/callback`. Keep the old one until step L3
@@ -150,7 +160,8 @@ same values before running it.
 | Variable | Set to |
 |---|---|
 | `HAWA_DESK_AUTH_MODE` | `required` |
-| `HAWA_GOOGLE_OIDC_CLIENT_ID`, `HAWA_GOOGLE_OIDC_CLIENT_SECRET`, `HAWA_GOOGLE_OIDC_HOSTED_DOMAINS` | from O5 |
+| `HAWA_GOOGLE_OIDC_CLIENT_ID`, `HAWA_GOOGLE_OIDC_CLIENT_SECRET`, `HAWA_GOOGLE_OIDC_ALLOWED_EMAILS` | from O5 |
+| `HAWA_GOOGLE_OIDC_HOSTED_DOMAINS` | from O5, or unset (optional when `HAWA_GOOGLE_OIDC_ALLOWED_EMAILS` is set) |
 | `HAWA_GOOGLE_OIDC_REDIRECT_URI` | `https://desk.hawzhin.app/auth/google/callback` |
 | `HAWA_PUBLIC_URL` | `https://desk.hawzhin.app`. `PUBLIC_TUNNEL_URL` must be unset: it is read first. |
 | `HAWA_JUDGE_BASE_URL` | `http://127.0.0.1:8080`. Judge links stay office-only, because the public Desk does not serve `/api/`. |
@@ -182,15 +193,27 @@ Deploy. From now on the office signs in at **https://desk.hawzhin.app**, on the 
   `all N checks passed`.
 - Run it again from a machine outside the office network, for example a phone hotspot.
 
-**L4. Enrol office Google accounts (ADR-064).** Core admits a Google account only when that account's
-verified subject is already provisioned (`hawa.users.external_subject`) with an active membership. The
-administrator role is needed for L6.
+**L4. Enrol office Google accounts (ADR-064, ADR-294 addendum).** Nothing to run: each account on
+`HAWA_GOOGLE_OIDC_ALLOWED_EMAILS` is enrolled the first time it signs in at https://desk.hawzhin.app.
+Core admits it only after openid-client has verified Google's token, and only if Google says the email
+is verified (`email_verified: true`) and the email (any case) is on the list. Migration 090's
+`hawa.enrol_office_oidc_user` then creates the office member, or binds the Google subject to an
+unbound member with that email. It gives the member exactly the listed roles and records an
+`office_oidc.enrolled` (or `.bound`) audit event. Later sign-ins match by subject.
 
-This release has **no supported command** for this. It is an open item: it needs a reviewed migration
-or admin script. Never use ad-hoc SQL on production.
+- **To remove someone:** delete their entry and redeploy. At start, and again before every sign-in,
+  Core revokes every enrolled account whose email is no longer listed: its memberships go inactive, its
+  Desk sessions are revoked, and an `office_oidc.revoked` audit event is written. The subject binding
+  stays, so the email cannot come back under a different Google account.
+- **To change a role:** edit the entry and redeploy. The member's sessions are revoked, and the next
+  sign-in carries the new role.
+- **An email already bound to a different Google account** is refused (403). There is no supported
+  unbind; ask the lead.
+- The Workspace path is unchanged. An account in `HAWA_GOOGLE_OIDC_HOSTED_DOMAINS` that is not on the
+  list still signs in only if it was provisioned by subject before.
 
 *Check:* the owner signs in at https://desk.hawzhin.app with Google, and *Settings* shows a named
-administrator.
+administrator. `GET /v1/office/customer-accounts` from that session answers 200.
 
 **L5. Reconnect Canva from the public Desk.** Canva connections belong to the signed-in Hawa user.
 Each office member who designs connects Canva from *Settings* at https://desk.hawzhin.app.

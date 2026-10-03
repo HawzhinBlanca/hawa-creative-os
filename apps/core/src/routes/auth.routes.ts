@@ -8,6 +8,7 @@ import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import type { RouteContext } from './types.js';
 import { DEFAULT_TENANT_ID, OPERATOR_USER_ID } from '../core-context.js';
 import { createGoogleOidcProvider, googleOidcSettings, oidcCodeChallenge, oidcCodeVerifier } from '../services/google-oidc.js';
+import { log } from '../logging.js';
 import { serviceTokenOf } from './lifecycle-internal.routes.js';
 
 export function registerAuthRoutes(ctx: RouteContext) {
@@ -31,6 +32,23 @@ export function registerAuthRoutes(ctx: RouteContext) {
   const googleOidc = options?.testAuth?.googleOidcProvider || (settings ? createGoogleOidcProvider(settings) : null);
   const oidcEnabled = Boolean(db && googleOidc);
   const oidcRls = { tenantId: defaultTenantId, userId: SYSTEM_AUTOMATION_USER_ID, role: 'operator' as const };
+  // ADR-294 addendum: HAWA_GOOGLE_OIDC_ALLOWED_EMAILS is the authority for the accounts it enrolled.
+  // Every enrolled account whose email left the list loses its memberships and Desk sessions, and a
+  // changed role is re-synced (migration 090). This runs at start, so a removal takes effect when Core
+  // restarts with the new list, and again before every sign-in, so it holds even if the start-up pass failed.
+  const allowedList = JSON.stringify([...(settings?.allowedEmails ?? new Map()).entries()]
+    .map(([email, roles]) => ({ email, roles })));
+  const reconcileEnrolments = async () => {
+    if (!db) return 0;
+    return withRlsContext(db, oidcRls, async (trx) => (await sql<{ changed: number }>`
+      SELECT hawa.reconcile_office_oidc_enrolments(${defaultTenantId}::uuid, ${allowedList}::jsonb) AS changed`
+      .execute(trx)).rows[0]?.changed ?? 0);
+  };
+  if (db && settings) {
+    reconcileEnrolments().then((changed) => {
+      if (changed) log.info(`[core:auth] office Google allow-list: ${changed} enrolled account(s) revoked or re-synced`);
+    }).catch((err) => log.warn('[core:auth] office Google allow-list reconciliation failed at start; it runs again before each sign-in:', err));
+  }
 
   registerRoute('get', '/auth/providers', (c: Context) => c.json({ googleWorkspace: oidcEnabled,
     trustedOffice: verifyRequestAuth(c).authMethod === 'trusted_office' }, 200));
@@ -89,10 +107,32 @@ export function registerAuthRoutes(ctx: RouteContext) {
     } catch {
       return problem(c, 401, 'Google Identity Rejected', 'The identity provider could not verify this sign-in');
     }
-    const user = await withRlsContext(db, oidcRls, async (trx) => (await sql<{
-      id: string; display_name: string; disabled_at: Date | null;
-    }>`SELECT * FROM hawa.lookup_office_oidc_user(${defaultTenantId}::uuid,${identity.subject})`
-      .execute(trx)).rows[0]);
+    try {
+      await reconcileEnrolments();
+    } catch (err) {
+      log.error('[core:auth] office Google allow-list reconciliation failed; refusing sign-in:', err);
+      return problem(c, 503, 'Office Sign-In Unavailable', 'Office membership could not be confirmed');
+    }
+    type OfficeUser = { id: string; display_name: string; disabled_at: Date | null };
+    let user: OfficeUser | undefined;
+    if (identity.allowedRoles?.length) {
+      // Verified email on the owner's list: create the member or bind this subject, with exactly the listed roles.
+      try {
+        user = await withRlsContext(db, oidcRls, async (trx) => (await sql<OfficeUser>`
+          SELECT * FROM hawa.enrol_office_oidc_user(${defaultTenantId}::uuid,${identity.subject},${identity.email},
+            ${identity.displayName},${[...identity.allowedRoles!]}::hawa.membership_role[])`.execute(trx)).rows[0]);
+      } catch (err) {
+        if ((err as { code?: string })?.code === '23505') {
+          return problem(c, 403, 'Office Membership Required', 'This email is already enrolled with a different Google account');
+        }
+        log.error('[core:auth] office Google enrolment failed:', err);
+        return problem(c, 503, 'Office Sign-In Unavailable', 'Office membership could not be recorded');
+      }
+    } else {
+      user = await withRlsContext(db, oidcRls, async (trx) => (await sql<OfficeUser>`
+        SELECT * FROM hawa.lookup_office_oidc_user(${defaultTenantId}::uuid,${identity.subject})`
+        .execute(trx)).rows[0]);
+    }
     if (!user || user.disabled_at) return problem(c, 403, 'Office Membership Required', 'This Google account is not enabled for Hawa Desk');
     const memberships = await withRlsContext(db, { tenantId: defaultTenantId, userId: user.id, role: 'requester' },
       async (trx) => (await sql<{ role: string }>`SELECT role::text FROM hawa.tenant_memberships
