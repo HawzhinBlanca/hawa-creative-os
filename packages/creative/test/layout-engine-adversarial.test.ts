@@ -228,7 +228,7 @@ describe('a story-format recipe sets its logo and copy on the grid it declares',
     it(recipe, () => {
       const l = solveRecipe({
         width: 1080, height: 1920, copy: { text: { 0: 'Workshop' } }, photos, photoSelection: { mode: 'choose', minimum: 1 }, palette: PALETTE, logoAspect: 1,
-        choice: { recipe, heroPhotoIndex: recipe === 'cutout_speaker' ? 3 : 0, texturePhotoIndex: null, cutoutPhotoIndex: recipe === 'cutout_speaker' ? 3 : null, slots: [{ copyIndex: 0, slot: 'title' }], params: { frame: 'inset', align: 'start' } },
+        choice: { recipe, heroPhotoIndex: 0, texturePhotoIndex: null, cutoutPhotoIndex: null, slots: [{ copyIndex: 0, slot: 'title' }], params: { frame: 'inset', align: 'start' } },
       });
       expect([l.logo.x, l.logo.x + l.logo.width]).toContain(l.grid.margin);
       expect(computeLayoutMetrics(l).alignmentScore).toBeGreaterThanOrEqual(ALIGNMENT_POLICY.passScore);
