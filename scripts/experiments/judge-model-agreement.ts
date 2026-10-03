@@ -161,7 +161,7 @@ async function agreement(rows: StoredJudgment[]) {
         perDimension[dim].agree++;
         dimsAgree++;
       } else {
-        disagreements.push({ id: row.id.slice(0, 8), dim, baseline: base, cheap });
+        disagreements.push({ id: row.id.slice(0, 8), dim, baseline: base, cheap: cheap ?? 'none' });
       }
     }
     const sameWinner = row.verdict?.majorityWinner === res.majorityWinner;

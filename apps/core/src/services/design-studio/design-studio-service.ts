@@ -2935,6 +2935,9 @@ export class DesignStudioService {
             receipt: order.receipt,
             // ADR-170: a photo brief's weighted totals, its art-direction checklist and the baseline named.
             ...(order.photoBrief ? { photoBrief: true, weights: order.weights, weightedVotesA: order.weightedVotesA, weightedVotesB: order.weightedVotesB } : {}),
+            // ADR-274 addendum: a poster client's vote: its weights, totals, legibility gate and any veto.
+            ...(order.posterVote ? { posterVote: true, weights: order.weights, weightedVotesA: order.weightedVotesA, weightedVotesB: order.weightedVotesB,
+              legibilityGate: order.legibilityGate, legibilityVeto: order.legibilityVeto ?? null } : {}),
             ...(order.artDirection ? { artDirection: order.artDirection } : {}),
             ...(order.baselineCandidateId !== undefined ? { baselineCandidateId: idFor(order.baselineCandidateId) ?? null } : {}),
           } as any,

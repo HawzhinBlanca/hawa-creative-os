@@ -1,5 +1,7 @@
 # Judge calibration, first paid run (ADR-274 item 6)
 
+> The first run is below. The **second run** (the poster vote, ADR-274 addendum) is at the end of this file. It replaced the five-vote judge for poster clients after this run, and its results supersede the recommendation in (a) point 3.
+
 **Run:** 2026-10-03, branch `claude/judge-calibration` (based on `claude/hunt3-fixes` @ `87f1a981`).
 **Approval:** owner, 2026-10-03, hard cap US$2.50 (recorded in `results.json` as `approval`).
 **Judge:** the production poster judge, `gpt-6.1-sol` (`resolveModel('judge')`, ADR-237). The served model on every receipt was `gpt-6.1-sol`.
@@ -144,3 +146,90 @@ HAWA_JUDGE_CALIBRATION_APPROVED="<approval>" OPENAI_API_KEY=... \
   --out plans/judge-calibration-2026-10-02/results.json
 python3 plans/judge-calibration-2026-10-02/analyze.py
 ```
+
+---
+
+# Second run: the poster vote (ADR-274 addendum, 2026-10-03)
+
+After the first run, the owner approved changing the judge for poster clients (KAAE) and re-running the calibration within the same US$2.50 cap. The design is in the ADR-274 addendum.
+
+**The poster vote:**
+- four voted dimensions: impact at a 300px feed thumbnail (weight 2), imagery and the visual idea (2), composition with the type craft inside it (2), and brand fit (1);
+- legibility as a gate: a veto only when one candidate's essential copy cannot be read.
+
+**Unchanged:**
+- other clients' prompts are byte-identical;
+- the call count is the same.
+
+**Setup:**
+- The same frozen set, images, harness and labels as the first run.
+- The harness now asks for and counts the vote with the production code (`judgeVoteSpec`, `tallyJudgeVotes`).
+- Raw data: `results-poster-vote.json`, and `analysis-poster-vote.json` (from `python3 analyze.py results-poster-vote.json analysis-poster-vote.json`).
+
+| | First run (five votes) | Poster vote |
+|---|---|---|
+| Decided agreement, round 1 (the frozen labels) | 17/29 (58.6%) | **27/30 (90.0%)** |
+| Decided agreement, round 2 | 23/31 (74.2%) | 24/31 (77.4%) |
+| Decided agreement, all six panel scores | 19/30 (63.3%) | 27/32 (84.4%) |
+| Three-way agreement, round 1 | 19/47 (40.4%) | 28/47 (59.6%) |
+| Kappa: round 1 / round 2 / all six | 0.21 / 0.32 / 0.24 | 0.22 / 0.17 / 0.28 |
+| **Our render vs office post**, decided, round 1 | 12/24 (50%) | **22/25 (88%)** |
+| Our render vs office post, decided, round 2 | 18/26 | 19/26 |
+| Our render vs office post, decided, all six | 14/25 | 22/27 (81.5%) |
+| Document page vs poster | 5/5 | 5/5 |
+| Clear pairs (a full panel point apart), decided | 15/20 | 21/21 |
+| Pairs where the verdict flips with order | 5/47 (10.6%) | **3/47 (6.4%)** |
+| Design shown first wins | 44/94 (46.8%) | 48/94 (51.1%) |
+| Judge ties / panel ties (round 1) | 5 / 15 | 3 / 15 |
+| Judge verdicts, our render vs office: ours / office / tie | 31 / 6 / 5 | 6 / 33 / 3 |
+
+**Dimension agreement.** On pairs the panel separates on that dimension, each poster dimension agrees with the panel's matching score:
+- imagery 89/90;
+- impact 68/74;
+- composition 53/66;
+- brand fit (vs `brand_polish`) 43/78.
+
+Brand fit is the one dimension still siding with our renders: 53 of 84 calls on our-render-vs-office pairs.
+
+**The legibility gate** fired 8 times. Every time it was on the broken office post d08, whose title a panel covers, and the votes agreed every time.
+
+**Canary** (`scripts/experiments/poster-vote-canary.ts`, `canary-poster-vote.json`). Production trusts a pick only if it beats a degraded copy of itself in both orders. Three composed KAAE posters (navy, cream and band, English and Sorani) each beat their canary 7-0 in both orders. So the poster vote, which has no text votes, does not mark every pick unreliable.
+
+## Reading it honestly
+
+The bar was agreement on our render vs an office post clearly over 50%. It cleared it: 88% decided on round 1 and 81.5% on all six panel scores, against 50% before. Order flips also fell.
+
+Three caveats:
+1. **Kappa did not move** (0.22 vs 0.21 on round 1; 0.17 vs 0.32 on round 2). The judge now decides 14 of the 15 panel ties, 13 of them for the office post.
+2. **A constant rule does about as well.** "The office post always wins" gets 21 of the 27 round-1 pairs the panel decided; the poster vote gets 22. Leave out the broken office post d08 and the constant rule gets 21/23, the poster vote 18/23.
+   - The change removed the first judge's structural bias toward type-led designs.
+   - It replaced it with the panel's group-level preference for a used photograph.
+   - It does not show that the judge tells near-equal designs apart.
+3. **Production's selection is not measured.** Production chooses among our own candidates for one brief, which are all text-only or all photo. The frozen set has only 5 such pairs, and they are gross.
+
+## Recommendation
+
+1. **Keep the poster vote; do not revert.**
+   - It meets the bar set for it.
+   - It removes a demonstrated bias.
+   - It keeps document page vs poster at 5/5.
+   - It halves the order flips and still beats the canary.
+   - Other clients are untouched.
+2. **Do not treat its pick between close candidates as calibrated.** Keep `humanChoiceRecommended` on ties.
+3. **Next measurement:**
+   - pairs within our own candidates, such as the poster variants of one brief;
+   - the human votes, which both cached runs can be rescored against for free.
+4. **Brand fit** still leans toward our renders. KAAE's profile ("generous space ... restrained") is the likely pull, and it is the owner's text.
+5. **`HAWA_JUDGE_OFFICE_REFERENCE`:** keep it off. It is untested, and $0.32 of the cap is left.
+
+## Cost
+
+| Run | Calls | USD |
+|---|---|---|
+| First run (five votes) | 94 | 1.0190 |
+| Poster vote: pilot (3 pairs) + full run (the pilot's 6 calls came from the cache) | 94 | 1.0739 |
+| Canary check (production format, 1080 PNGs) | 6 | 0.0921 |
+| **Total** | **194** | **2.1849** of the US$2.50 cap |
+
+- **Per call:** the poster vote cost $0.0114 a call on the calibration images ($0.0108 before). In production format the canary calls were $0.0151-0.0158, inside ADR-237's $0.0143-0.0198.
+- **Per design:** the call count is unchanged (8 judge calls per KAAE design with three candidates).

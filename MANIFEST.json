@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T09:43:22Z",
+  "generatedAt": "2026-10-03T10:22:06Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 926,
+  "fileCount": 930,
   "files": [
     {
       "path": ".dockerignore",
@@ -1294,8 +1294,8 @@
     },
     {
       "path": "adrs/274_selection_without_the_document_default.md",
-      "sha256": "5b921b4860c313788ee598e786c405135996abfb9beccc4ec57b4c0c56d6be91",
-      "bytes": 13652
+      "sha256": "fb7d32b3360b6fb565d938797f1fdcc0093b644ce5fdae08879110406d513354",
+      "bytes": 20856
     },
     {
       "path": "adrs/275_heavy_sans_display_caps.md",
@@ -2404,23 +2404,33 @@
     },
     {
       "path": "plans/judge-calibration-2026-10-02/RESULTS.md",
-      "sha256": "078925a1e01b0ea7cec3bcd8a3551152c7119089a1207d3d00c78752d6b648cc",
-      "bytes": 11435
+      "sha256": "5fa97df34dd54210e592af9cb53f2009bf05b3e2e43adf01ee12d3c7a7c74dfd",
+      "bytes": 17000
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/analysis-poster-vote.json",
+      "sha256": "6700bee72f9fa050e97584dd2733050d4a111d2d41565d591b36e9446c9500dc",
+      "bytes": 6836
     },
     {
       "path": "plans/judge-calibration-2026-10-02/analysis.json",
-      "sha256": "3734a6664696e1395b6d82481c906cfd4e1e351fda544de0c2450e0cb16c1688",
-      "bytes": 6830
+      "sha256": "c1abd925fd4f9bb791f58fb50f2966563fe19935826277d70e0e7b2c56dd6a90",
+      "bytes": 6993
     },
     {
       "path": "plans/judge-calibration-2026-10-02/analyze.py",
-      "sha256": "f99ac774684f475d8653a07a8e25f4b4c141b0a3f1598b791d1223a8b4501117",
-      "bytes": 6998
+      "sha256": "b85771aacbdb4608d7b5f93c9f6c8f67a1fa605c770fde7e042b49baad553860",
+      "bytes": 7797
     },
     {
       "path": "plans/judge-calibration-2026-10-02/call-cache.json",
-      "sha256": "435329ffd03e6e7162df6102a727fe836f528361453475e05327f66760c8d892",
-      "bytes": 197862
+      "sha256": "46bd68a786fc42c081cf1c8bc9ec784a4b092431645b789c3486c42ede3b6665",
+      "bytes": 402061
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/canary-poster-vote.json",
+      "sha256": "88e7c8d06ece1847de036accd2176f8e66dc3f3127833209f497292026b4a63e",
+      "bytes": 9536
     },
     {
       "path": "plans/judge-calibration-2026-10-02/frozen-set.json",
@@ -2431,6 +2441,11 @@
       "path": "plans/judge-calibration-2026-10-02/panel-scores.json",
       "sha256": "7d886ebde9adc6392c91fcbeb72178c57d31ba7d53700223b3643d10df109b14",
       "bytes": 39339
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/results-poster-vote.json",
+      "sha256": "41f1e9863c8a7407d36b6e3053aceb494dce78da281e3eae105542047234d994",
+      "bytes": 267967
     },
     {
       "path": "plans/judge-calibration-2026-10-02/results.json",
@@ -3644,8 +3659,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "c06e434f8fb4fd60138224365464ebe2150974ea917e790b91de92fba5ca8f23",
-      "bytes": 909909
+      "sha256": "87cf45263b418a159e12009705aed694287988f39938e75e904d8d5b4d339a1e",
+      "bytes": 910730
     },
     {
       "path": "plans/user-stories.csv",
@@ -3979,18 +3994,23 @@
     },
     {
       "path": "scripts/experiments/judge-calibration.ts",
-      "sha256": "7d46d4879ef8e46df939a70f46bcf9073261a31a8381e0378a8c4c09870c9ce6",
-      "bytes": 19764
+      "sha256": "748f8580839016500da9e2b6a88dca4360a37737a93467f210c3ba548fa80aac",
+      "bytes": 20520
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",
-      "sha256": "9dd15a3e95d726ebb6b37591751f30bf5e3afeeec53b0e51bd7dce01821d28c6",
-      "bytes": 11715
+      "sha256": "c8cb3c6d974ed7c5353b8771625f561fd9805b51e6dd30b43207cbca0eb4537e",
+      "bytes": 11732
     },
     {
       "path": "scripts/experiments/layout-reasoning-effort.ts",
       "sha256": "8ab730b959d123fd3851bf0798c9e5d3c978c27cd4106d744f1467fce0edac5f",
       "bytes": 7272
+    },
+    {
+      "path": "scripts/experiments/poster-vote-canary.ts",
+      "sha256": "9fd4977a3e3dfd29b74592a512b1b01d00dac15c5112bf50a59c0da19c04bb1d",
+      "bytes": 7313
     },
     {
       "path": "scripts/experiments/prompt-cache-probe.ts",

@@ -7,26 +7,26 @@
    "b": 26
   },
   "judgeVerdicts": {
-   "a": 31,
-   "b": 11,
-   "tie": 5
+   "tie": 3,
+   "b": 38,
+   "a": 6
   },
   "decidedBoth": {
-   "pairs": 29,
-   "agree": 17,
-   "rate": 0.586
+   "pairs": 30,
+   "agree": 27,
+   "rate": 0.9
   },
   "panelDecided": {
    "pairs": 32,
-   "judgeRight": 17,
-   "judgeTie": 3,
-   "judgeWrong": 12
+   "judgeRight": 27,
+   "judgeTie": 2,
+   "judgeWrong": 3
   },
   "threeWay": {
-   "agree": 19,
-   "rate": 0.404
+   "agree": 28,
+   "rate": 0.596
   },
-  "kappa": 0.208
+  "kappa": 0.217
  },
  "round2Labels": {
   "pairs": 47,
@@ -36,26 +36,26 @@
    "tie": 13
   },
   "judgeVerdicts": {
-   "a": 31,
-   "b": 11,
-   "tie": 5
+   "tie": 3,
+   "b": 38,
+   "a": 6
   },
   "decidedBoth": {
    "pairs": 31,
-   "agree": 23,
-   "rate": 0.742
+   "agree": 24,
+   "rate": 0.774
   },
   "panelDecided": {
    "pairs": 34,
-   "judgeRight": 23,
+   "judgeRight": 24,
    "judgeTie": 3,
-   "judgeWrong": 8
+   "judgeWrong": 7
   },
   "threeWay": {
-   "agree": 25,
-   "rate": 0.532
+   "agree": 24,
+   "rate": 0.511
   },
-  "kappa": 0.315
+  "kappa": 0.165
  },
  "allSixPanelJudges": {
   "pairs": 47,
@@ -65,26 +65,26 @@
    "b": 25
   },
   "judgeVerdicts": {
-   "a": 31,
-   "b": 11,
-   "tie": 5
+   "tie": 3,
+   "b": 38,
+   "a": 6
   },
   "decidedBoth": {
-   "pairs": 30,
-   "agree": 19,
-   "rate": 0.633
+   "pairs": 32,
+   "agree": 27,
+   "rate": 0.844
   },
   "panelDecided": {
    "pairs": 33,
-   "judgeRight": 19,
-   "judgeTie": 3,
-   "judgeWrong": 11
+   "judgeRight": 27,
+   "judgeTie": 1,
+   "judgeWrong": 5
   },
   "threeWay": {
-   "agree": 21,
-   "rate": 0.447
+   "agree": 29,
+   "rate": 0.617
   },
-  "kappa": 0.244
+  "kappa": 0.276
  },
  "byKind_round1": {
   "document_page_vs_poster": {
@@ -120,26 +120,26 @@
     "b": 21
    },
    "judgeVerdicts": {
-    "a": 31,
-    "b": 6,
-    "tie": 5
+    "tie": 3,
+    "b": 33,
+    "a": 6
    },
    "decidedBoth": {
-    "pairs": 24,
-    "agree": 12,
-    "rate": 0.5
+    "pairs": 25,
+    "agree": 22,
+    "rate": 0.88
    },
    "panelDecided": {
     "pairs": 27,
-    "judgeRight": 12,
-    "judgeTie": 3,
-    "judgeWrong": 12
+    "judgeRight": 22,
+    "judgeTie": 2,
+    "judgeWrong": 3
    },
    "threeWay": {
-    "agree": 14,
-    "rate": 0.333
+    "agree": 23,
+    "rate": 0.548
    },
-   "kappa": 0.146
+   "kappa": 0.194
   }
  },
  "byKind_allSix": {
@@ -176,35 +176,35 @@
     "b": 20
    },
    "judgeVerdicts": {
-    "a": 31,
-    "b": 6,
-    "tie": 5
+    "tie": 3,
+    "b": 33,
+    "a": 6
    },
    "decidedBoth": {
-    "pairs": 25,
-    "agree": 14,
-    "rate": 0.56
+    "pairs": 27,
+    "agree": 22,
+    "rate": 0.815
    },
    "panelDecided": {
     "pairs": 28,
-    "judgeRight": 14,
-    "judgeTie": 3,
-    "judgeWrong": 11
+    "judgeRight": 22,
+    "judgeTie": 1,
+    "judgeWrong": 5
    },
    "threeWay": {
-    "agree": 16,
-    "rate": 0.381
+    "agree": 24,
+    "rate": 0.571
    },
-   "kappa": 0.176
+   "kappa": 0.254
   }
  },
  "position": {
   "pairs": 47,
-  "flips": 5,
-  "flipRate": 0.106,
+  "flips": 3,
+  "flipRate": 0.064,
   "calls": 94,
-  "firstShownWins": 44,
-  "firstShownWinRate": 0.468
+  "firstShownWins": 48,
+  "firstShownWinRate": 0.511
  },
  "positionByKind": {
   "document_page_vs_poster": {
@@ -217,11 +217,11 @@
   },
   "ours_vs_office": {
    "pairs": 42,
-   "flips": 5,
-   "flipRate": 0.119,
+   "flips": 3,
+   "flipRate": 0.071,
    "calls": 84,
-   "firstShownWins": 39,
-   "firstShownWinRate": 0.464
+   "firstShownWins": 43,
+   "firstShownWinRate": 0.512
   }
  },
  "panelRound1VsRound2": {
@@ -239,33 +239,33 @@
    "b": 18
   },
   "judgeVerdicts": {
-   "a": 9,
-   "b": 11,
-   "tie": 2
+   "a": 4,
+   "b": 17,
+   "tie": 1
   },
   "decidedBoth": {
-   "pairs": 20,
-   "agree": 15,
-   "rate": 0.75
+   "pairs": 21,
+   "agree": 21,
+   "rate": 1.0
   },
   "panelDecided": {
    "pairs": 22,
-   "judgeRight": 15,
-   "judgeTie": 2,
-   "judgeWrong": 5
+   "judgeRight": 21,
+   "judgeTie": 1,
+   "judgeWrong": 0
   },
   "threeWay": {
-   "agree": 15,
-   "rate": 0.682
+   "agree": 21,
+   "rate": 0.955
   },
-  "kappa": 0.384
+  "kappa": 0.864
  },
  "oursVsOffice": {
   "pairs": 42,
   "judgeVerdict": {
-   "ours": 31,
-   "office": 6,
-   "tie": 5
+   "tie": 3,
+   "office": 33,
+   "ours": 6
   },
   "panelRound1": {
    "tie": 15,
@@ -277,7 +277,7 @@
    "ours": 8,
    "office": 20
   },
-  "callsOursWins": 67,
+  "callsOursWins": 15,
   "calls": 84
  },
  "perOfficePost": {
@@ -285,17 +285,17 @@
    "file": "photo03_why_accreditation_card_en.jpg",
    "panelRound1": 6,
    "panelAllSix": 6,
-   "officeWins": 0,
-   "oursWins": 4,
-   "ties": 0
+   "officeWins": 3,
+   "oursWins": 0,
+   "ties": 1
   },
   "d02": {
    "file": "photo06_global_partnership_plate_ckb.jpg",
    "panelRound1": 6,
    "panelAllSix": 6,
-   "officeWins": 1,
-   "oursWins": 1,
-   "ties": 2
+   "officeWins": 4,
+   "oursWins": 0,
+   "ties": 0
   },
   "d08": {
    "file": "KAAE_Standards_Higher_Ed_1080x1350.png",
@@ -309,32 +309,32 @@
    "file": "photo05_global_partnership_plate_en.jpg",
    "panelRound1": 6,
    "panelAllSix": 6,
-   "officeWins": 0,
-   "oursWins": 3,
-   "ties": 1
+   "officeWins": 4,
+   "oursWins": 0,
+   "ties": 0
   },
   "d11": {
    "file": "photo11_peer_evaluators_call_en.jpg",
    "panelRound1": 6.67,
    "panelAllSix": 6.33,
-   "officeWins": 2,
-   "oursWins": 2,
+   "officeWins": 4,
+   "oursWins": 0,
    "ties": 0
   },
   "d15": {
    "file": "photo04_why_accreditation_card_ckb.jpg",
    "panelRound1": 6,
    "panelAllSix": 5.83,
-   "officeWins": 0,
-   "oursWins": 4,
+   "officeWins": 4,
+   "oursWins": 0,
    "ties": 0
   },
   "d19": {
    "file": "photo01_k12_field_visit_report_en.jpg",
    "panelRound1": 5.33,
    "panelAllSix": 5.67,
-   "officeWins": 1,
-   "oursWins": 2,
+   "officeWins": 3,
+   "oursWins": 0,
    "ties": 0
   },
   "d21": {
@@ -342,85 +342,78 @@
    "panelRound1": 5.67,
    "panelAllSix": 5.67,
    "officeWins": 0,
-   "oursWins": 3,
-   "ties": 0
+   "oursWins": 2,
+   "ties": 1
   },
   "d25": {
    "file": "KAAE_Commences_2026_Cycle_1080x1350.png",
    "panelRound1": 5.67,
    "panelAllSix": 5.33,
-   "officeWins": 0,
-   "oursWins": 2,
-   "ties": 1
+   "officeWins": 3,
+   "oursWins": 0,
+   "ties": 0
   },
   "d26": {
    "file": "photo02_k12_field_visit_report_ckb.jpg",
    "panelRound1": 5.33,
    "panelAllSix": 5.33,
-   "officeWins": 0,
-   "oursWins": 3,
+   "officeWins": 3,
+   "oursWins": 0,
    "ties": 0
   },
   "d30": {
    "file": "photo12_peer_evaluators_call_ckb.jpg",
    "panelRound1": 6.33,
    "panelAllSix": 5.67,
-   "officeWins": 1,
-   "oursWins": 1,
+   "officeWins": 2,
+   "oursWins": 0,
    "ties": 1
   },
   "d31": {
    "file": "photo09_eid_al_adha_sky_title.jpg",
    "panelRound1": 6.33,
    "panelAllSix": 6.33,
-   "officeWins": 1,
-   "oursWins": 2,
+   "officeWins": 3,
+   "oursWins": 0,
    "ties": 0
   }
  },
  "dimensionVsPanelDimension_allSix": {
-  "hierarchy": {
-   "panelDimension": "hierarchy",
-   "calls": 80,
-   "agree": 65,
-   "rate": 0.812
+  "impact": {
+   "panelDimension": "impact",
+   "calls": 74,
+   "agree": 68,
+   "rate": 0.919
+  },
+  "imagery": {
+   "panelDimension": "imagery",
+   "calls": 90,
+   "agree": 89,
+   "rate": 0.989
   },
   "composition": {
    "panelDimension": "composition",
    "calls": 66,
-   "agree": 54,
-   "rate": 0.818
-  },
-  "typographic_craft": {
-   "panelDimension": "typography",
-   "calls": 72,
-   "agree": 57,
-   "rate": 0.792
+   "agree": 53,
+   "rate": 0.803
   },
   "brand_fit": {
    "panelDimension": "brand_polish",
    "calls": 78,
-   "agree": 50,
-   "rate": 0.641
-  },
-  "legibility": {
-   "panelDimension": null,
-   "calls": 0,
-   "agree": 0,
-   "rate": null
+   "agree": 43,
+   "rate": 0.551
   }
  },
  "cost": {
-  "spentUsd": 0.9979,
-  "paidCalls": 92,
-  "cachedCalls": 2
+  "spentUsd": 1.005,
+  "paidCalls": 88,
+  "cachedCalls": 6
  },
  "oursVsOfficeByDimension": {
-  "hierarchy": 58,
-  "composition": 20,
-  "typographic_craft": 75,
-  "brand_fit": 47,
-  "legibility": 79
+  "impact": 28,
+  "imagery": 12,
+  "composition": 14,
+  "brand_fit": 53
  },
- "legibilityVetoes": 0
+ "legibilityVetoes": 8
 }

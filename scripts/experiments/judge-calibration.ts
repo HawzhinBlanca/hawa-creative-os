@@ -33,6 +33,11 @@
  * its own file name; office posts fall back to packages/creative/assets/exemplars. A missing image
  * stops the run before anything is sent.
  *
+ * The vote (ADR-274 addendum, 2026-10-03). The harness asks for and counts the votes with the
+ * production judge's own `judgeVoteSpec` and `tallyJudgeVotes`, for a poster client. The first run
+ * (results.json) used the five equal votes; the poster vote since then is impact, imagery,
+ * composition and brand fit, weighted, with legibility as a gate.
+ *
  * Caching and the cap (2026-10-03, first paid run). Every call's verdict and receipt is stored under
  * the sha256 of its exact request (model, system prompt, user text, image bytes, detail, output
  * allowance), in `--cache` (default plans/judge-calibration-2026-10-02/call-cache.json), after each
@@ -50,9 +55,11 @@ import {
   buildPairwiseJudgeSystemPrompt,
   judgeImageDetail,
   judgeMaxTokens,
-  JUDGE_DIMENSIONS,
-  PAIRWISE_DIMENSION_JSON_SCHEMA,
-  type JudgeDimension,
+  judgeVoteSpec,
+  tallyJudgeVotes,
+  type AnyJudgeDimension,
+  type DimensionEvaluationOutput,
+  type LegibilityGateEntry,
 } from '../../packages/creative/src/studio/pairwise-judge-v3.js';
 import { guidelineFidelityRule, pageGrammarFromRaw } from '../../packages/creative/src/studio/page-grammar.js';
 import { OpenAiStudioClient } from '../../packages/creative/src/studio/openai-studio-client.js';
@@ -118,18 +125,24 @@ export interface JudgedPair {
   winnerBFirst: 'a' | 'b';
   /** The consistent winner, or a tie when the two orders disagree (the production rule). */
   verdict: Preference;
-  votes: { aFirst: Record<JudgeDimension, 'A' | 'B'>; bFirst: Record<JudgeDimension, 'A' | 'B'> };
+  votes: { aFirst: Votes; bFirst: Votes };
   costUsd: number;
   /** Each order's call: its receipt and rationales, and whether it came from the cache (cost 0 this run). */
   calls?: { aFirst: CallRecord; bFirst: CallRecord };
 }
 
+export type Votes = Partial<Record<AnyJudgeDimension, 'A' | 'B'>>;
+
 /** One judge call as stored in the cache and the report (no key, no request body). */
 export interface CallRecord {
   key: string;
   winner: 'A' | 'B';
-  votes: Record<JudgeDimension, 'A' | 'B'>;
-  rationales: Record<JudgeDimension, string>;
+  votes: Votes;
+  rationales: Partial<Record<AnyJudgeDimension, string>>;
+  /** The poster vote (ADR-274 addendum): weighted totals, the legibility gate and any veto. */
+  weighted?: { A: number; B: number };
+  legibilityGate?: { A: LegibilityGateEntry; B: LegibilityGateEntry };
+  legibilityVeto?: 'A' | 'B' | null;
   receipt: { responseId: string; servedModel: string | null; inputTokens: number; outputTokens: number; reasoningTokens: number;
     costUsd: number; costBasis: string; latencyMs: number };
   cached?: boolean;
@@ -212,9 +225,11 @@ type Cache = Record<string, CallRecord>;
 
 async function judgeOrder(
   client: OpenAiStudioClient, model: string, system: string, first: string, second: string, office: string | undefined,
-  cache: Cache, guard: () => void
+  cache: Cache, guard: () => void, posterImpact: boolean
 ): Promise<CallRecord> {
   const detail = judgeImageDetail(model);
+  // The production judge's own dimensions, weights, schema and count (judgeVoteSpec, tallyJudgeVotes).
+  const spec = judgeVoteSpec(false, posterImpact);
   const text = `${CALIBRATION_FACTS}
 
 Attached are two images rendered at detail '${detail}':
@@ -222,13 +237,13 @@ Attached are two images rendered at detail '${detail}':
 - Image 2: Candidate B
 
 TASK:
-Examine Candidate A and Candidate B visually and evaluate them independently across all ${JUDGE_DIMENSIONS.length} dimensions.${office
+Examine Candidate A and Candidate B visually and evaluate them independently across all ${spec.dimensions.length} dimensions.${office
     ? '\n\nImage 3 is one of the client\'s own published posts, shown as the standard of impact and brand fit the client sets: the standard, not a design to copy.' : ''}`;
   const maxTokens = judgeMaxTokens(model);
   const key = callCacheKey({ model, system, text, images: [first, second, ...(office ? [office] : [])], detail, maxTokens });
   if (cache[key]) return { ...cache[key], cached: true };
   guard();
-  const res = await client.createStructuredCompletion<{ dimensions: Record<JudgeDimension, { winner: 'A' | 'B'; rationale?: string }> }>({
+  const res = await client.createStructuredCompletion<DimensionEvaluationOutput>({
     model,
     messages: [
       { role: 'system', content: system },
@@ -239,24 +254,20 @@ Examine Candidate A and Candidate B visually and evaluate them independently acr
         ...(office ? [{ type: 'image_url' as const, image_url: { url: office, detail } }] : []),
       ] },
     ],
-    jsonSchema: { name: 'PairwiseDimensionVerdict', schema: PAIRWISE_DIMENSION_JSON_SCHEMA, strict: true },
+    jsonSchema: { name: 'PairwiseDimensionVerdict', schema: spec.schema, strict: true },
     reasoningEffort: 'low',
     maxTokens,
   });
-  const votes = {} as Record<JudgeDimension, 'A' | 'B'>;
-  const rationales = {} as Record<JudgeDimension, string>;
-  for (const d of JUDGE_DIMENSIONS) {
-    const w = res.data.dimensions?.[d]?.winner;
-    if (w !== 'A' && w !== 'B') {
-      throw Object.assign(new Error(`The judge returned no vote for ${d}; the run stops rather than count a missing answer.`),
-        { costUsd: res.receipt.costUsd });
-    }
-    votes[d] = w;
-    rationales[d] = String(res.data.dimensions[d].rationale ?? '');
+  let t: ReturnType<typeof tallyJudgeVotes>;
+  try {
+    t = tallyJudgeVotes(res.data, spec, model);
+  } catch (err) {
+    throw Object.assign(err instanceof Error ? err : new Error(String(err)), { costUsd: res.receipt.costUsd });
   }
-  const a = JUDGE_DIMENSIONS.filter((d) => votes[d] === 'A').length;
   const r = res.receipt;
-  const record: CallRecord = { key, winner: a >= 3 ? 'A' : 'B', votes, rationales, receipt: {
+  const record: CallRecord = { key, winner: t.majorityWinner, votes: t.votes, rationales: t.rationales,
+    ...(spec.posterVote ? { weighted: { A: t.weightedA, B: t.weightedB }, legibilityGate: t.legibilityGate, legibilityVeto: t.legibilityVeto ?? null } : {}),
+    receipt: {
     responseId: String(r.responseId ?? ""), servedModel: r.servedModel ?? null, inputTokens: r.inputTokens, outputTokens: r.outputTokens,
     reasoningTokens: r.reasoningTokens, costUsd: r.costUsd, costBasis: String(r.costBasis ?? ""), latencyMs: r.latencyMs } };
   cache[key] = record;
@@ -308,13 +319,15 @@ async function main(): Promise<void> {
   const results: JudgedPair[] = [];
   const out = arg('out');
   let stopped: string | null = null;
+  const voteSpec = judgeVoteSpec(false, true);
   const report = () => ({ model, approval, set: setPath, ranAt: new Date().toISOString(), officeReference, maxUsd,
+    vote: { dimensions: voteSpec.dimensions, weights: voteSpec.weights, legibilityGate: voteSpec.posterVote },
     run: { paidCalls, cachedCalls, spentUsd: round(spent), stopped, cache: cachePath }, images: imageHashes,
     summary: summarizeCalibration(results), results });
   const write = () => { if (out) writeFileSync(resolve(out), `${JSON.stringify(report(), null, 2)}\n`); };
   const call = async (first: string, second: string) => {
     try {
-      const rec = await judgeOrder(client, model, system, first, second, office, cache, guard);
+      const rec = await judgeOrder(client, model, system, first, second, office, cache, guard, true);
       if (rec.cached) cachedCalls++;
       else {
         paidCalls++;

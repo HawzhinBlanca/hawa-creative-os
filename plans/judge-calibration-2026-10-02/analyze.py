@@ -1,15 +1,20 @@
-"""Agreement of the production judge with the blind panel, from results.json and panel-scores.json.
+"""Agreement of the production judge with the blind panel, from a stored run and panel-scores.json.
 
-Free: reads the stored run, sends nothing. Usage: python3 plans/judge-calibration-2026-10-02/analyze.py
-Writes analysis.json beside it and prints the tables used in RESULTS.md.
+Free: reads the stored run, sends nothing.
+Usage: python3 plans/judge-calibration-2026-10-02/analyze.py [results.json] [analysis.json]
+(defaults: the first run, results.json -> analysis.json; the poster vote is
+results-poster-vote.json -> analysis-poster-vote.json). Prints the tables used in RESULTS.md.
 """
 import json
+import sys
 import statistics as st
 from collections import Counter
 from pathlib import Path
 
 HERE = Path(__file__).parent
-run = json.loads((HERE / 'results.json').read_text())
+RESULTS = sys.argv[1] if len(sys.argv) > 1 else 'results.json'
+OUT = sys.argv[2] if len(sys.argv) > 2 else 'analysis.json'
+run = json.loads((HERE / RESULTS).read_text())
 panel = json.loads((HERE / 'panel-scores.json').read_text())['images']
 frozen = json.loads((HERE / 'frozen-set.json').read_text())
 MARGIN = frozen['tieMargin']
@@ -114,7 +119,9 @@ for r in ovo:
 out['perOfficePost'] = dict(sorted(office.items()))
 
 # Dimension votes: how often each dimension sides with the per-call winner, and with the panel's matching dimension.
-DIMS = {'hierarchy': 'hierarchy', 'composition': 'composition', 'typographic_craft': 'typography', 'brand_fit': 'brand_polish', 'legibility': None}
+PANEL_DIM = {'hierarchy': 'hierarchy', 'composition': 'composition', 'typographic_craft': 'typography', 'brand_fit': 'brand_polish',
+             'legibility': None, 'impact': 'impact', 'imagery': 'imagery'}
+DIMS = {d: PANEL_DIM[d] for d in results[0]['votes']['aFirst']}
 dim = {}
 for d, pd in DIMS.items():
     agree = n = 0
@@ -126,7 +133,9 @@ for d, pd in DIMS.items():
                 continue
             want = 'a' if diff > 0 else 'b'
             for order, first in (('aFirst', 'a'), ('bFirst', 'b')):
-                v = r['votes'][order][d]
+                v = r['votes'][order].get(d)
+                if v is None:
+                    continue
                 got = first if v == 'A' else ('b' if first == 'a' else 'a')
                 n += 1
                 agree += got == want
@@ -134,5 +143,9 @@ for d, pd in DIMS.items():
 out['dimensionVsPanelDimension_allSix'] = dim
 
 out['cost'] = {'spentUsd': run['run']['spentUsd'], 'paidCalls': run['run']['paidCalls'], 'cachedCalls': run['run']['cachedCalls']}
-(HERE / 'analysis.json').write_text(json.dumps(out, indent=1) + '\n')
+# Each judge dimension: how often our render won it against an office post (84 calls).
+out['oursVsOfficeByDimension'] = {d: sum((r['votes']['aFirst'].get(d) == 'A') + (r['votes']['bFirst'].get(d) == 'B') for r in ovo) for d in DIMS}
+vetoes = [c for r in results for c in (r.get('calls') or {}).values() if c.get('legibilityVeto')]
+out['legibilityVetoes'] = len(vetoes)
+(HERE / OUT).write_text(json.dumps(out, indent=1) + '\n')
 print(json.dumps(out, indent=1))
