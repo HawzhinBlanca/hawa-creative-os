@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T06:29:31Z",
+  "generatedAt": "2026-10-03T09:43:22Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 920,
+  "fileCount": 926,
   "files": [
     {
       "path": ".dockerignore",
@@ -2403,9 +2403,39 @@
       "bytes": 47459
     },
     {
+      "path": "plans/judge-calibration-2026-10-02/RESULTS.md",
+      "sha256": "078925a1e01b0ea7cec3bcd8a3551152c7119089a1207d3d00c78752d6b648cc",
+      "bytes": 11435
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/analysis.json",
+      "sha256": "3734a6664696e1395b6d82481c906cfd4e1e351fda544de0c2450e0cb16c1688",
+      "bytes": 6830
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/analyze.py",
+      "sha256": "f99ac774684f475d8653a07a8e25f4b4c141b0a3f1598b791d1223a8b4501117",
+      "bytes": 6998
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/call-cache.json",
+      "sha256": "435329ffd03e6e7162df6102a727fe836f528361453475e05327f66760c8d892",
+      "bytes": 197862
+    },
+    {
       "path": "plans/judge-calibration-2026-10-02/frozen-set.json",
       "sha256": "c913caf4ed345e4d5d4f68192592c5932b9fd2eb4d79616d385dd994a901676a",
       "bytes": 8040
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/panel-scores.json",
+      "sha256": "7d886ebde9adc6392c91fcbeb72178c57d31ba7d53700223b3643d10df109b14",
+      "bytes": 39339
+    },
+    {
+      "path": "plans/judge-calibration-2026-10-02/results.json",
+      "sha256": "58eefb208b4bcc58fd836db0d0edcf1e73b65cb35c45be323d99186a3de64c66",
+      "bytes": 254214
     },
     {
       "path": "plans/kaae-2025-guideline/CODEX_MERGE_NOTE.md",
@@ -3949,8 +3979,8 @@
     },
     {
       "path": "scripts/experiments/judge-calibration.ts",
-      "sha256": "82d11924c469b83616474cc6d62e3fd1fa6183b747b3cc8859b8928a5e2d1478",
-      "bytes": 13633
+      "sha256": "7d46d4879ef8e46df939a70f46bcf9073261a31a8381e0378a8c4c09870c9ce6",
+      "bytes": 19764
     },
     {
       "path": "scripts/experiments/judge-model-agreement.ts",
