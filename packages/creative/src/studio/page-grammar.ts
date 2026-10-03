@@ -16,6 +16,7 @@ import { calculateLuminanceContrastRatio, hexToLuminance } from './composite-con
 import { fillColoursUnder } from './shape-gradient.js';
 import { sunburstRadius } from './brand-elements.js';
 import { admitPageGrammarFromReference } from './page-grammar-admission.js';
+import { ALIGNMENT_POLICY, computeLayoutMetrics } from './layout-metrics.js';
 
 /**
  * ADR-238: a client's page grammar, read from its reference pack (`rules.pageGrammar`), and the
@@ -811,6 +812,10 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   };
   balanceGrammarLines(layout, input);
   checkGrammarLayout(layout, clear);
+  // The composer promises hard QA's alignment check, as the poster composer does: a title-only
+  // sunburst cover's logo and gold bar ended on no line (0.667 against 0.70).
+  const alignment = computeLayoutMetrics(layout).alignmentScore;
+  if (alignment < ALIGNMENT_POLICY.passScore) throw new GrammarInfeasibleError(`alignment ${alignment} is under hard QA's ${ALIGNMENT_POLICY.passScore}`);
   return layout;
 }
 

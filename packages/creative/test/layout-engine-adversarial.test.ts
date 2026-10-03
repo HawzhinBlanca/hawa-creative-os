@@ -5,6 +5,7 @@ import { composeGrammarLayout, pageGrammarFromRaw, GrammarInfeasibleError, type 
 import { composePosterLayout, POSTER_VARIANTS } from '../src/studio/poster-grammar.js';
 import { measureTextGeometry } from '../src/studio/render-layout-v2.js';
 import { validateLayoutV2 } from '../src/studio/validate-layout-v2.js';
+import { ALIGNMENT_POLICY, computeLayoutMetrics } from '../src/studio/layout-metrics.js';
 import { studioReferenceFromRaw } from '../src/studio/hard-qa.js';
 import { encodeStudioTransferV2 } from '../src/studio/transfer-v2.js';
 import { checkCanvaPptx } from '../../qa/src/canva-pptx-check.js';
@@ -131,5 +132,22 @@ describe('a Sorani composed design reaches the Canva deck', () => {
       expect(check.copyPass).toBe(true);
       expect(check.fontPass).toBe(true);
     });
+  }
+});
+
+describe('the page and cover composer promises hard QA\'s alignment check, as the poster composer does', () => {
+  // Before: a title-only sunburst cover set the logo, the title and its gold bar on the start margin,
+  // and the logo's and the bar's free ends lined up with nothing: alignment 0.667 against hard QA's
+  // 0.70 (POOR_GRID_ALIGNMENT), on every canvas. The composer now refuses such a layout itself.
+  for (const lines of [['Workshop'], ['Call for Peer Evaluators']]) {
+    for (const [width, height] of [[1080, 1350], [1080, 1080], [1080, 1920], [1920, 1080]] as const) {
+      it(`${lines[0]} ${width}x${height}`, () => {
+        for (const variant of ['pattern', 'sunburst', 'brand_card', 'cards']) {
+          const tone = variant === 'pattern' || variant === 'sunburst' ? 'cover' : 'page';
+          const l = tryCompose(() => composeGrammarLayout(input(lines, ['title'], { width, height, tone, variant })));
+          if (l) expect(computeLayoutMetrics(l).alignmentScore, variant).toBeGreaterThanOrEqual(ALIGNMENT_POLICY.passScore);
+        }
+      });
+    }
   }
 });
