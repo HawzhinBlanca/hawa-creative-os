@@ -375,7 +375,10 @@ function fill(edges: number[][], width: number, height: number): Float32Array {
  * marks the columns of loose glyphs (see shapeLine), which the match does not score.
  */
 function drawLine(shaped: ShapedLine, sizePx: number): Drawn {
-  const used = [...new Set(shaped.glyphs.map((g) => g.file))].map((f) => openFont(f, 'draw'));
+  // Validate each file's content once for this drawing, rather than reading and hashing the
+  // same font again for every glyph. Retain separate shaping/outline faces (ADR-290).
+  const faces = new Map([...new Set(shaped.glyphs.map((g) => g.file))].map((f) => [f, openFont(f, 'draw')]));
+  const used = [...faces.values()];
   const em = (k: (f: any) => number) => Math.max(sizePx, ...used.map((f) => k(f) * sizePx / f.unitsPerEm));
   const margin = Math.ceil(sizePx * 0.5);
   const top = Math.ceil(em((f) => f.ascent) * 1.1) + margin;
@@ -388,7 +391,7 @@ function drawLine(shaped: ShapedLine, sizePx: number): Drawn {
   const segments: Array<[number, number]> = [];
   let open = false;
   for (const g of shaped.glyphs) {
-    const font = openFont(g.file, 'draw');
+    const font = faces.get(g.file);
     const scale = sizePx / font.unitsPerEm;
     const glyph = font.getGlyph(g.id);
     const commands = glyph.path?.commands ?? [];
@@ -611,19 +614,66 @@ function blur(src: Float32Array, width: number, height: number, radius: number):
   return out;
 }
 
-/**
- * Pearson correlation of `a` (the found ink) and `b` read at an offset, over the given rows and columns.
- * Columns of `b` marked in `skip` (loose glyphs) are left out.
- */
+interface Moments { width: number; sum: Float64Array; square: Float64Array }
+
+/** Summed-area tables preserve all pixels, including empty margins used by Pearson correlation. */
+function moments(data: Float32Array, width: number, height: number): Moments {
+  const stride = width + 1;
+  const sum = new Float64Array(stride * (height + 1)), square = new Float64Array(sum.length);
+  for (let y = 0; y < height; y++) {
+    let s = 0, s2 = 0;
+    for (let x = 0; x < width; x++) {
+      const p = data[y * width + x], i = (y + 1) * stride + x + 1;
+      s += p; s2 += p * p;
+      sum[i] = sum[i - stride] + s; square[i] = square[i - stride] + s2;
+    }
+  }
+  return { width: stride, sum, square };
+}
+
+function rectangle(m: Moments, data: Float64Array, x0: number, y0: number, x1: number, y1: number): number {
+  return data[y1 * m.width + x1] - data[y0 * m.width + x1] - data[y1 * m.width + x0] + data[y0 * m.width + x0];
+}
+
+/** Pearson correlation; masked columns are omitted from every moment and from the pixel count. */
 function ncc(a: Float32Array, aw: number, b: Float32Array, bw: number, ox: number, oy: number,
-  xs: [number, number], ys: [number, number], skip?: Uint8Array): { r: number; mass: number; n: number } {
+  xs: [number, number], ys: [number, number], skip?: Uint8Array, cached?: { a: Moments; b: Moments }): { r: number; mass: number; n: number } {
   let n = 0, sa = 0, sb = 0, sab = 0, saa = 0, sbb = 0;
-  for (let y = ys[0]; y < ys[1]; y++) {
-    const ra = y * aw, rb = (y + oy) * bw + ox;
-    for (let x = xs[0]; x < xs[1]; x++) {
-      if (skip && skip[x + ox]) continue;
-      const p = a[ra + x], q = b[rb + x];
-      sa += p; sb += q; sab += p * q; saa += p * p; sbb += q * q; n++;
+  if (cached && !skip) {
+    // Every search reuses these four moments; only the cross-product depends on both images.
+    // Masked fallback/digit columns use individual column rectangles below.
+    const [x0, x1] = xs, [y0, y1] = ys;
+    n = (x1 - x0) * (y1 - y0);
+    sa = rectangle(cached.a, cached.a.sum, x0, y0, x1, y1);
+    saa = rectangle(cached.a, cached.a.square, x0, y0, x1, y1);
+    sb = rectangle(cached.b, cached.b.sum, x0 + ox, y0 + oy, x1 + ox, y1 + oy);
+    sbb = rectangle(cached.b, cached.b.square, x0 + ox, y0 + oy, x1 + ox, y1 + oy);
+    for (let y = y0; y < y1; y++) {
+      const ra = y * aw, rb = (y + oy) * bw + ox;
+      for (let x = x0; x < x1; x++) sab += a[ra + x] * b[rb + x];
+    }
+  } else if (cached && skip) {
+    const [x0, x1] = xs, [y0, y1] = ys;
+    for (let x = x0; x < x1; x++) {
+      if (skip[x + ox]) continue;
+      n += y1 - y0;
+      sa += rectangle(cached.a, cached.a.sum, x, y0, x + 1, y1);
+      saa += rectangle(cached.a, cached.a.square, x, y0, x + 1, y1);
+      sb += rectangle(cached.b, cached.b.sum, x + ox, y0 + oy, x + ox + 1, y1 + oy);
+      sbb += rectangle(cached.b, cached.b.square, x + ox, y0 + oy, x + ox + 1, y1 + oy);
+    }
+    for (let y = y0; y < y1; y++) {
+      const ra = y * aw, rb = (y + oy) * bw + ox;
+      for (let x = x0; x < x1; x++) if (!skip[x + ox]) sab += a[ra + x] * b[rb + x];
+    }
+  } else {
+    for (let y = ys[0]; y < ys[1]; y++) {
+      const ra = y * aw, rb = (y + oy) * bw + ox;
+      for (let x = xs[0]; x < xs[1]; x++) {
+        if (skip && skip[x + ox]) continue;
+        const p = a[ra + x], q = b[rb + x];
+        sa += p; sb += q; sab += p * q; saa += p * p; sbb += q * q; n++;
+      }
     }
   }
   if (!n) return { r: 0, mass: 0, n };
@@ -697,8 +747,15 @@ function matchLine(found: Coverage, foundInk: { x0: number; x1: number; y0: numb
   for (let x = 0; x < bw; x++) { const u = x - RX - ox; if (u >= 0 && u < drawn.width) skip[x] = drawn.loose[u]; }
   const D = blur(raw, bw, bh, radius);
   const loose = drawn.hasLoose ? skip : undefined;
+  const drawingMoments = moments(D, bw, bh);
+  const foundMoments = new WeakMap<Float32Array, Moments>();
+  foundMoments.set(F, moments(F, width, height));
   // Reading D at (x + RX - dx, y + RY - dy) places the drawing shifted by (dx, dy).
-  const at = (dx: number, dy: number, xs: [number, number], ys: [number, number], k?: Uint8Array, from: Float32Array = F) => ncc(from, width, D, bw, RX - dx, RY - dy, xs, ys, k);
+  const at = (dx: number, dy: number, xs: [number, number], ys: [number, number], k?: Uint8Array, from: Float32Array = F) => {
+    let a = foundMoments.get(from);
+    if (!a) { a = moments(from, width, height); foundMoments.set(from, a); }
+    return ncc(from, width, D, bw, RX - dx, RY - dy, xs, ys, k, { a, b: drawingMoments });
+  };
   // With loose glyphs, a run of letters is scored on the found pieces of ink that lie mostly in its
   // columns: a provider's digit beside it, wider or placed apart, is not a letter of the run.
   const pieces = drawn.hasLoose ? inkPieces(found) : undefined;

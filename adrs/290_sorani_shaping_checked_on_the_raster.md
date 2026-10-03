@@ -5,6 +5,22 @@
 **Requirements:** FR-034 (Sorani script, digits, fonts, mixed direction), FR-035 (Arabic shaping and direction), FR-038 (QA of glyphs and bidi behaviour)
 **Related:** ADR-118 (Pango text measurement), ADR-257 (advisory checks never change the verdict), ADR-258 (export picture and line checks), ADR-273 (office posts as fixtures)
 
+## Performance correction (2026-10-03, Codex)
+
+The first clean Linux CI run of private release `148efe34` passed text accuracy but failed two
+existing timing assertions (3129 ms against 2000 ms for the retained Canva sheet; 2088 ms against
+1500 ms for the peer-evaluators poster). Preserve these budgets and all calibration thresholds.
+
+The raster matcher now reuses summed-area tables for the four independent Pearson moments during
+its offset searches; it still evaluates the full cross-product and counts empty margins. When
+fallback/digit columns are masked, every moment and the sample count omit exactly those columns.
+Tables are scoped to one line match; alternate found-ink maps have separate weakly held tables.
+Each drawing opens and content-validates its outline font once per distinct file rather than per
+glyph. Cross-call file-content hashes, bounded font cache, separate shaping/outline faces, all
+search offsets, scale candidates, negative hypotheses and advisory semantics remain unchanged.
+No dependency, model or foundation change. Evidence and explicit release limits:
+`plans/hawzhin-app-integration-2026-10-02/SHAPING_PERFORMANCE_PROOF.json`.
+
 ## Context
 
 Nothing checked that the Kurdish text in a picture is drawn correctly. The copy checks (`checkCanvaPptx`,

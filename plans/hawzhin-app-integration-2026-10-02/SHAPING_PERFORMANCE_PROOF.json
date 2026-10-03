@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-03T19:32:05.356443+00:00",
+  "requirements": [
+    "FR-034",
+    "FR-035",
+    "FR-038",
+    "NFR-012",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "basis": "uncommitted correction of private release 148efe3454ddee8090a69e317ed1a504c6b6cfab; source hashes below",
+  "originalCI": {
+    "url": "https://github.com/HawzhinBlanca/hawa-creative-os/actions/runs/37145998354",
+    "passed": 9155,
+    "failed": 2,
+    "skipped": 96,
+    "failures": [
+      {
+        "fixture": "native group-1",
+        "actualMs": 3129,
+        "budgetMs": 2000
+      },
+      {
+        "fixture": "peer-evaluators colour",
+        "actualMs": 2088,
+        "budgetMs": 1500
+      }
+    ]
+  },
+  "changes": [
+    "one content-validated outline font per distinct file in each drawing",
+    "summed-area Pearson moments with exact column masking and pixel count; cross-product/search/calibration unchanged"
+  ],
+  "newDependencies": false,
+  "thresholdsChanged": false,
+  "advisorySemanticsChanged": false,
+  "localBenchmark": {
+    "host": "owner Mac; sequential fixtures; single before/after observation, not a Linux SLA qualification",
+    "comparisons": [
+      {
+        "fixture": "photo02_k12_field_visit_report_ckb",
+        "mode": "exact",
+        "beforeMs": 326,
+        "afterMs": 224,
+        "beforeFontReads": 220,
+        "afterFontReads": 15,
+        "semanticReportSha256": "51d5685b50a726a16c9ac640ac74848d6b03df7574d60dbeec632f1f3647fb1a",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo02_k12_field_visit_report_ckb",
+        "mode": "colour",
+        "beforeMs": 556,
+        "afterMs": 322,
+        "beforeFontReads": 220,
+        "afterFontReads": 15,
+        "semanticReportSha256": "c57aca61f6ef119e347e814168b22d81de9e3e207d2a0d1f7425a24e049243ac",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo04_why_accreditation_card_ckb",
+        "mode": "exact",
+        "beforeMs": 149,
+        "afterMs": 109,
+        "beforeFontReads": 177,
+        "afterFontReads": 9,
+        "semanticReportSha256": "62b2ac1fd61a03ab47dd0f14f7718ec6f19c25d9674ddf3a119afebd5483a0df",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo04_why_accreditation_card_ckb",
+        "mode": "colour",
+        "beforeMs": 247,
+        "afterMs": 146,
+        "beforeFontReads": 177,
+        "afterFontReads": 9,
+        "semanticReportSha256": "86dabbc06efbce35d382d0b2f997575e5e68d0ecc0b5eb4d967f2640ca4839b9",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo06_global_partnership_plate_ckb",
+        "mode": "exact",
+        "beforeMs": 170,
+        "afterMs": 110,
+        "beforeFontReads": 22,
+        "afterFontReads": 3,
+        "semanticReportSha256": "380c5792e80a178e61fe4cbfb370d731273f26c3e41ed0bf78b9568072bcab8a",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo06_global_partnership_plate_ckb",
+        "mode": "colour",
+        "beforeMs": 325,
+        "afterMs": 208,
+        "beforeFontReads": 22,
+        "afterFontReads": 3,
+        "semanticReportSha256": "380c5792e80a178e61fe4cbfb370d731273f26c3e41ed0bf78b9568072bcab8a",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo08_prime_minister_meeting_scrim_ckb",
+        "mode": "exact",
+        "beforeMs": 159,
+        "afterMs": 110,
+        "beforeFontReads": 131,
+        "afterFontReads": 6,
+        "semanticReportSha256": "d38ac900d4e68998178195c214fa145591759f39cc4746a20f3bf8f58f6cd41a",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo08_prime_minister_meeting_scrim_ckb",
+        "mode": "colour",
+        "beforeMs": 291,
+        "afterMs": 196,
+        "beforeFontReads": 131,
+        "afterFontReads": 6,
+        "semanticReportSha256": "e593a86666175126d490dfc3f1f50aeee6a1301483083b5ba35257372f158312",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo09_eid_al_adha_sky_title",
+        "mode": "exact",
+        "beforeMs": 169,
+        "afterMs": 99,
+        "beforeFontReads": 22,
+        "afterFontReads": 3,
+        "semanticReportSha256": "d8cdc41a4d232d6236b73f1a18e38113d46d0354f65f5779b3145c1f59e4659e",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo09_eid_al_adha_sky_title",
+        "mode": "colour",
+        "beforeMs": 282,
+        "afterMs": 150,
+        "beforeFontReads": 22,
+        "afterFontReads": 3,
+        "semanticReportSha256": "5a0f1f8662c2c9cc6502bb1ca627dea75fee8101c3f90140b2650cc282781f97",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo12_peer_evaluators_call_ckb",
+        "mode": "exact",
+        "beforeMs": 277,
+        "afterMs": 159,
+        "beforeFontReads": 193,
+        "afterFontReads": 27,
+        "semanticReportSha256": "15d45e151f95ef2ee75fe691a3342668610add24fd32bc97b54ba76730c66432",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "photo12_peer_evaluators_call_ckb",
+        "mode": "colour",
+        "beforeMs": 738,
+        "afterMs": 401,
+        "beforeFontReads": 193,
+        "afterFontReads": 27,
+        "semanticReportSha256": "b2a7a42f981ac7b77f45598d28abadc15b6e7dc7768a1e1470f0b6cb80feac8b",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "group-1",
+        "mode": "native",
+        "beforeMs": 668,
+        "afterMs": 502,
+        "beforeFontReads": 1428,
+        "afterFontReads": 1215,
+        "semanticReportSha256": "c62c95038da3b5cc81e2cee97351d6bcac7fc95458dd7b16970f64658537564f",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "group-2",
+        "mode": "native",
+        "beforeMs": 675,
+        "afterMs": 440,
+        "beforeFontReads": 2919,
+        "afterFontReads": 2631,
+        "semanticReportSha256": "8523786152c07dfffa883e565f59f72499ebdd609405cacdb0e275c2d746e5a9",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "group-3",
+        "mode": "native",
+        "beforeMs": 663,
+        "afterMs": 446,
+        "beforeFontReads": 2060,
+        "afterFontReads": 1772,
+        "semanticReportSha256": "fcc78b610e09d10e5096f1eb5d2ce155e98454f9735da8612117fedda8b293ed",
+        "identicalExceptTime": true
+      },
+      {
+        "fixture": "group-4",
+        "mode": "native",
+        "beforeMs": 751,
+        "afterMs": 505,
+        "beforeFontReads": 2170,
+        "afterFontReads": 1941,
+        "semanticReportSha256": "cd4e5a6e41a1953a3e7c0b1e20b77938bf8f373bc1fce701a46c7569827c9ea0",
+        "identicalExceptTime": true
+      }
+    ]
+  },
+  "affectedTests": {
+    "files": 4,
+    "passed": 71,
+    "failed": 0,
+    "skipped": 0,
+    "durationSeconds": 66.62,
+    "suite": [
+      "packages/creative/test/export-text-shaping.test.ts",
+      "apps/core/test/export-text-shaping.test.ts",
+      "packages/creative/test/text-shaping-pool.test.ts",
+      "packages/creative/test/font-outline-isolation.test.ts"
+    ],
+    "baseline": {
+      "files": 2,
+      "passed": 41,
+      "failed": 0,
+      "durationSeconds": 50.91
+    }
+  },
+  "typecheck": {
+    "activeRoots": 819,
+    "passed": true
+  },
+  "lintPassed": true,
+  "sourceHashes": {
+    "packages/creative/src/studio/export-text-shaping.ts": "cc3354d24087fb451eacee1b0841e8039d4375d72abe37a291ce8e4513821217",
+    "adrs/290_sorani_shaping_checked_on_the_raster.md": "023449c8009a32a508c7e17872cecc68dbf0f83e9fd35eb29676e96d9556339e"
+  },
+  "reportHashes": {
+    "output/qualification/2026-10-03-shaping-performance/before.json": "00563af9eeeb5c596b2358bbfe5e2ab0773b28c5776517cce9553089ce1d7ace",
+    "output/qualification/2026-10-03-shaping-performance/after.json": "0244e98fb2b450576723318e00a653bfd9d9bdb8f267d5747e4c6018d404f196",
+    "output/qualification/2026-10-03-shaping-performance/before.log": "79cf174fd1a77837f77d5702e72b48d5d8f8bcd34c6028bf9d2011689ceb1980",
+    "output/qualification/2026-10-03-shaping-performance/affected.log": "0c3ce02a9cfbe9073a06e7977e6a8b64d055ddcee05b51754762ddde58570b75",
+    "output/qualification/2026-10-03-shaping-performance/types.log": "38ff3fa3ad0234bfa215a88bee5a2b32a02da5e4ce79096f76127bcf0188805c",
+    "output/qualification/2026-10-03-shaping-performance/lint.log": "249903b8d77b696f2585f8a3fd60de2ecee6642076fe5e487446ef69bc962fed",
+    "output/qualification/2026-10-03-shaping-performance/benchmark.ts": "405b098d62a27d05e21865c5133999e0f663432bf650090cead1307000f46174"
+  },
+  "fullRegressionVerified": false,
+  "cleanLinuxCIVerified": false,
+  "deployed": false,
+  "fullReleasePass": false,
+  "limits": [
+    "existing private148 release remains healthy",
+    "clean Linux full-suite/resealed repair/private deploy pending",
+    "public website/customer-native/human/hosting/recovery/coverage admission remains open"
+  ]
+}
