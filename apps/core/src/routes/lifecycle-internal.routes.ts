@@ -60,7 +60,7 @@ import { lateChangeOfficeAlert, lateChangeTargets, linkedLifecycleReplies, readN
   readRevisionPhotoDecision, recordRevisionPhotoDecision,
   readRoutingRefusal, recordRoutingRefusal,
   revisionIntakeReceipts, verifiedRevisionIntake, waitingLifecycleRequests,
-  type LateChangeStage, type LateRequesterChange, type WaitingLifecycleRequest } from '../services/lifecycle-chat-target.js';
+  type ClientChoice, type LateChangeStage, type LateRequesterChange, type WaitingLifecycleRequest } from '../services/lifecycle-chat-target.js';
 import { parkTelegramUpdate, parkedUpdateChat } from '../services/polled-update-dispatch.js';
 import { createLifecycleChatAnswers } from '../services/lifecycle-chat-answers.js';
 import { activeChatRequests, openingChatRequests, pendingAskFor, readIntentReceipt, recordIntentReceipt, replyBindings,
@@ -361,8 +361,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
         clientTimeout = due.question;
         settle = false;
         releasedDeferral = true;
-        beside = { text: say(CLIENT_QUESTION_MESSAGES.timedOutToOffice, requesterLang(due.question.words)), parseMode: 'HTML' };
-        besideKey = `client-question:${due.question.briefUpdateId}`;
+        // ADR-284 addendum (live canary 2026-10-03): once the kept brief has opened, its request's first answer said
+        // it (with "a designer will make …"); the notice stays only for a brief that does not open after all.
+        const openedAlready = await withRlsContext(db, SYSTEM_SCOPE, (trx) => readNewBriefDecision(trx, DEFAULT_TENANT_ID, preparedUpdate.update_id));
+        if (!openedAlready) {
+          beside = { text: say(CLIENT_QUESTION_MESSAGES.timedOutToOffice, requesterLang(due.question.words)), parseMode: 'HTML' };
+          besideKey = `client-question:${due.question.briefUpdateId}`;
+        }
       }
     }
     // ADR-145: the settle of a message set behind its sender's held brief. While that brief is still
@@ -933,13 +938,18 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
             /** Opens a lifecycle request for a brief (ADR-135), one per language (ADR-139). */
             const openBrief = async (briefText: string, instructionOnly: boolean, takeHeldPhoto = true,
               /** ADR-235: the organisation the sender named for a kept brief, or the office to choose it; and its photo. */
-              opts: { clientId?: string; forOffice?: boolean; keptImage?: ClientQuestion['image'] } = {}): Promise<Response> => {
+              opts: { clientId?: string; forOffice?: boolean; keptImage?: ClientQuestion['image']; clientChoice?: ClientChoice } = {}): Promise<Response> => {
               // ADR-235: the kept brief whose question timed out opens, as it was kept, for the office to choose.
               if (clientTimeout && clientTimeout.briefUpdateId === update.update_id) {
                 briefText = clientTimeout.words;
                 instructionOnly = clientTimeout.instructionOnly;
                 takeHeldPhoto = false;
-                opts = { forOffice: true, ...(clientTimeout.image ? { keptImage: clientTimeout.image } : {}) };
+                opts = { forOffice: true, ...(clientTimeout.image ? { keptImage: clientTimeout.image } : {}),
+                  clientChoice: { outcome: 'timeout', lang: requesterLang(clientTimeout.words) } };
+                // ADR-284 addendum (live canary 2026-10-03): the request's first answer says it, with "a designer will
+                // make …", in one message; the notice is said only if the brief does not open after all.
+                beside = null;
+                besideKey = null;
               }
               // What was to be said beside the answer before this brief was read (a video's words were used).
               const besideOnEntry = beside;
@@ -1054,7 +1064,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                     ...((lifecycleImage || admittedAlbum || allocation.kind==='multiple') ? { sourceUpdate: update } : {}),
                     ...(allocation.kind==='multiple' ? {deliverableCount:parts.length,
                       deliverableDetailsRequired:parts.filter(p=>p.detailsRequired).map(p=>p.requestId)} : {}),
-                    ...(siblings.length ? { siblings } : {}) });
+                    ...(siblings.length ? { siblings } : {}),
+                    ...(opts.clientChoice ? { clientChoice: opts.clientChoice } : {}) });
               });
               if (!stored) {
                 beside = null;
@@ -1241,10 +1252,13 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                   // Answered in the language of the answer (an English brief may be answered in Sorani).
                   const lang = requesterLang(text, requesterLang(question.words));
                   mayHoldBrief = false;
-                  beside = resolution.outcome === 'client' ? null : { text: say(resolution.outcome === 'office' ? CLIENT_QUESTION_MESSAGES.passedToOffice
-                    : resolution.outcome === 'unmatched' ? CLIENT_QUESTION_MESSAGES.notMatchedToOffice : CLIENT_QUESTION_MESSAGES.expiredToOffice, lang), parseMode: 'HTML' };
+                  // ADR-284 addendum (live canary 2026-10-03): "No problem. I've passed it to the office…" and "Got it. A
+                  // designer will make …" came back to back. The request's first answer says both, in the answer's language.
+                  const officeChooses = resolution.outcome === 'office' || resolution.outcome === 'unmatched' || resolution.outcome === 'expired'
+                    ? { outcome: resolution.outcome, lang } as ClientChoice : null;
                   return await openBrief(question.words, question.instructionOnly, true, {
                     ...(resolution.outcome === 'client' && resolution.clientId ? { clientId: resolution.clientId } : { forOffice: true }),
+                    ...(officeChooses ? { clientChoice: officeChooses } : {}),
                     ...(question.image ? { keptImage: question.image } : {}) });
                 }
               }
@@ -1586,7 +1600,8 @@ export function registerLifecycleInternalRoutes(ctx: RouteContext): void {
                       // ADR-230: a cancel kept as a note came too late; the requester hears that, truthfully.
                       : plan.note === 'cancel' ? withdrawTooLateText(target.stage, target.title, lang, Boolean(officeChatFor(chatId)),
                         requestLabel({ title: target.title, askedAt: target.createdAt, words: target.words }, lang))
-                      : noteText(plan.note, spokenStage(target), target.title, lang, held, plan.redo === true);
+                      : noteText(plan.note, spokenStage(target), target.title, lang, held, plan.redo === true,
+                        plan.feedback === true);
                     const late: LateRequesterChange = { requestId: target.requestId, taskId: target.currentTaskId,
                       requestRev: target.rev, requestStage: target.stage as LateChangeStage, text: words,
                       kind: plan.note, ...(plan.note === 'hold' ? {held} : {}), title: shortTitle(target.title), answer: said };

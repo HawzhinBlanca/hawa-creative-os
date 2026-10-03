@@ -138,7 +138,11 @@ export type TurnPlan =
   | { kind: 'open'; text: string; instructionOnly: boolean; resolves?: number }
   /** `redo`: redo words (ADR-200 addendum); the requester hears "I'll redo …". */
   | { kind: 'revise'; requestId: string; directive: string; resolves?: number; redo?: true }
-  | { kind: 'note'; note: 'change' | 'cancel' | 'hold'; requestId: string; words: string; resolves?: number; redo?: true }
+  /**
+   * `feedback` (ADR-284 addendum, live canary 2026-10-03): an opinion about the only design the sender has
+   * on the way, said before any draft of it exists ("the poster looks cheap"); the designer making it hears it.
+   */
+  | { kind: 'note'; note: 'change' | 'cancel' | 'hold'; requestId: string; words: string; resolves?: number; redo?: true; feedback?: true }
   /**
    * ADR-255: a cancel of several designs the requester named together ("cancel both of them", "all of
    * them", or "both" said to "which design?"). Each is withdrawn by its own request object, under this
@@ -1017,6 +1021,23 @@ function unplacedWithNothingOnTheWay(words: string): TurnPlan {
 }
 
 /**
+ * ADR-284 addendum (live canary 2026-10-03): with one request on the way, opened for a designer and with no draft
+ * yet ("manual" before any draft: revision 1 or 2), "the poster looks cheap" was asked "Is this a change to …, or
+ * a new design?". Nothing has been drafted that the words could be a change of, and they are not a new brief: they
+ * are the requester's opinion of the design being made. The designer hears them (the office's usual note alert),
+ * and the requester is told so; no question, no paid round. Words that name a subject of their own, carry brief
+ * copy or ask for a design are left to the question, as is any chat with a draft or with several requests.
+ */
+function feedbackBeforeAnyDraft(changeable: ChatRequestView[], words: string): TurnPlan | null {
+  if (changeable.length !== 1) return null;
+  const [only] = changeable;
+  if (only.stage !== 'manual' || waitsForRequester(only)) return null;
+  const core = corePhrase(words);
+  if (!ABOUT_A_DESIGN.test(core) || carriesBriefCopy(core) || namesItsOwnSubject(core) || asksForNewDesign(words)) return null;
+  return { kind: 'note', note: 'change', requestId: only.requestId, words, feedback: true };
+}
+
+/**
  * ADR-182: a message that goes on with a brief its sender is still sending (the brief is held a few
  * seconds for photos, ADR-143): people type a brief as several short messages ("Hi, we need a poster
  * for the graduation" / "Date: 12 October at 5 pm" / "Venue: the main hall"), add a line of style
@@ -1759,6 +1780,8 @@ function planByReading(full: TurnInput): TurnPlan {
       const bound = changeable.filter((r) => input.bound.includes(r.requestId));
       if (bound.length === 1) return changeFor(bound[0], words, 'reply', undefined) ?? ask('unclear', bound, true);
       if (!changeable.length) return unplacedWithNothingOnTheWay(words);
+      const feedback = feedbackBeforeAnyDraft(changeable, words);
+      if (feedback) return feedback;
       return ask('unclear', [...(bound.length ? bound : changeable)].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), true);
     }
   }
@@ -2069,9 +2092,12 @@ export function redoText(stage: string, requestTitle: string, lang: Lang, starte
 }
 
 /** The requester's answer to a note kept on a request (a change or a cancel). */
-export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requestTitle: string, lang: Lang, held = false, redo = false): string {
+export function noteText(note: 'change' | 'cancel' | 'hold', stage: string, requestTitle: string, lang: Lang, held = false, redo = false,
+  feedback = false): string {
   if (redo && note === 'change') return redoText(stage, requestTitle, lang);
   const t = { title: title({ title: requestTitle }, lang) };
+  // ADR-284 addendum (live canary 2026-10-03): an opinion said before any draft: the designer still making it hears it.
+  if (feedback && note === 'change' && stage === 'manual') return say(ROUTING_MESSAGES.redoPassedDesigner, lang, t);
   if (note === 'cancel') return say(ROUTING_MESSAGES.cancelAsked, lang, t);
   if (note === 'hold') return say(held ? ROUTING_MESSAGES.holdConfirmed : ROUTING_MESSAGES.holdAsked, lang, t);
   // ADR-230 section 6: a change kept while a draft is being made is applied in a new round when it finishes.

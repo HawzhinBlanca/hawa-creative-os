@@ -44,4 +44,28 @@ export const CLIENT_QUESTION_MESSAGES = {
     en: "Thanks. I've told the office that {title} is for {client}.",
     ckb: 'سوپاس. بە ئۆفیسەکەم ڕاگەیاند کە {title} بۆ {client}ە.',
   },
+  // ADR-284 addendum (live canary 2026-10-03): the request's first answer when the office chooses the organisation,
+  // in one message. The requester heard two back to back ("No problem. I've passed it to the office…" and "Got it.
+  // A designer will make …"). Each line is the answer above followed by the designer's line of `receivedForDesigner`,
+  // in both languages, so no new Sorani wording is introduced. `{title}` is the design's name (bold).
+  /** "I don't know", "not sure", "just make it", with the request opened for a designer. */
+  passedToOfficeDesigner: {
+    en: "No problem. I've passed it to the office, and they'll choose the organisation. A designer will make {title} and send it to you here.",
+    ckb: 'کێشە نییە. ناردم بۆ ئۆفیسەکە، ئەوان دامەزراوەکە هەڵدەبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت.',
+  },
+  /** An answer that names no organisation the office works with, with the request opened for a designer. */
+  notMatchedToOfficeDesigner: {
+    en: "I couldn't match that to an organisation I know, so I've passed it to the office to choose. A designer will make {title} and send it to you here.",
+    ckb: 'نەمتوانی ئەوە بە دامەزراوەیەک کە دەیناسم ببەستمەوە، بۆیە ناردم بۆ ئۆفیسەکە بۆ ئەوەی هەڵیبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت.',
+  },
+  /** An answer that came long after the question, with the request opened for a designer. */
+  expiredToOfficeDesigner: {
+    en: "It's been a while since I asked, so I've passed your request to the office to choose the organisation. A designer will make {title} and send it to you here.",
+    ckb: 'ماوەیەکە پرسیارەکەم کردووە، بۆیە داواکارییەکەت ناردم بۆ ئۆفیسەکە بۆ ئەوەی دامەزراوەکە هەڵبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت.',
+  },
+  /** Nobody answered within thirty minutes, with the request opened for a designer. */
+  timedOutToOfficeDesigner: {
+    en: "I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. A designer will make {title} and send it to you here.",
+    ckb: 'نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت.',
+  },
 } as const satisfies PhraseBook;

@@ -17,7 +17,7 @@ import { TelegramSenderApi, isDeskChannel } from './telegram-sender.js';
 import { DesignRunApi, validStartNotice, type DesignRunInput, type DesignStartNotice } from './design-run.js';
 import { chatInbox } from './chat-inbox.js';
 import { parseNativeReviewSubmission, type NativeReviewSubmission, type NativeReviewReply } from '@hawa/domain';
-import { INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, requesterTitleName, say, type Phrase, type RequesterLang } from '@hawa/integrations';
+import { CLIENT_QUESTION_MESSAGES, INBOX_MESSAGES, LIFECYCLE_MESSAGES, OUTCOME_MESSAGES, ROUTING_MESSAGES, bold, escapeTelegramHtml, requesterLang, requesterTitleName, say, type Phrase, type RequesterLang } from '@hawa/integrations';
 
 const DEFAULT_TENANT_ID = '00000000-0000-4000-a000-000000000001';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,9 +58,17 @@ export interface OpenManualEvent {
   };
 }
 
+/** ADR-284 addendum: how "who is this design for?" ended when the office chooses, and the answer's language. */
+export interface InitialClientChoice { outcome: 'office' | 'unmatched' | 'expired' | 'timeout'; lang: RequesterLang }
+
 export interface ManualLifecycleState {
   initialRequesterHold?: {officeAlerts:Array<{chatId:string;text:string}>};
   initialOfficeAlerts?:Array<{chatId:string;text:string}>;
+  /**
+   * ADR-284 addendum (live canary 2026-10-03): the brief was kept to ask who it is for (ADR-235) and opened for the
+   * office to choose. The acknowledgement then says both ("…passed it to the office… A designer will make …").
+   */
+  initialClientChoice?: InitialClientChoice;
   v: 1;
   requestId: string;
   tenantId: string;
@@ -336,11 +344,33 @@ const requesterFields = (draft: { rawText: string; title: string }): Pick<Manual
   ...(typeof draft.title === 'string' && draft.title.trim() ? { title: draft.title.trim().slice(0, 200) } : {}),
 });
 
+const CLIENT_CHOICE_ACK: Record<InitialClientChoice['outcome'], Phrase> = {
+  office: CLIENT_QUESTION_MESSAGES.passedToOfficeDesigner,
+  unmatched: CLIENT_QUESTION_MESSAGES.notMatchedToOfficeDesigner,
+  expired: CLIENT_QUESTION_MESSAGES.expiredToOfficeDesigner,
+  timeout: CLIENT_QUESTION_MESSAGES.timedOutToOfficeDesigner,
+};
+/** Core's `clientChoice` on the first projection, when it is one this worker knows. */
+const clientChoiceOf = (value: unknown): Pick<ManualLifecycleState, 'initialClientChoice'> => {
+  const v = value as Partial<InitialClientChoice> | null | undefined;
+  return v && typeof v === 'object' && typeof v.outcome === 'string' && Object.prototype.hasOwnProperty.call(CLIENT_CHOICE_ACK, v.outcome) &&
+    (v.lang === 'en' || v.lang === 'ckb') ? { initialClientChoice: { outcome: v.outcome, lang: v.lang } } : {};
+};
+
+/** The request's first answer to a brief a designer makes; one message, whatever led to it. */
+function acknowledgementText(state: Pick<ManualLifecycleState, 'lang' | 'title' | 'initialRequesterHold' | 'initialClientChoice'>): string {
+  if (state.initialRequesterHold) return requesterText(state, ROUTING_MESSAGES.statusHeld);
+  const choice = state.initialClientChoice;
+  // In the language of the answer to "who is this design for?" (an English brief may be answered in Sorani).
+  return choice ? requesterText({ ...state, lang: choice.lang }, CLIENT_CHOICE_ACK[choice.outcome])
+    : requesterText(state, LIFECYCLE_MESSAGES.receivedForDesigner);
+}
+
 function sendAcknowledgement(ctx: Pick<OpenContext, 'send'>,
-  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title' | 'initialRequesterHold' | 'initialOfficeAlerts'>): void {
+  state: Pick<ManualLifecycleState, 'requestId' | 'chatId' | 'tenantId' | 'taskId' | 'lang' | 'title' | 'initialRequesterHold' | 'initialOfficeAlerts' | 'initialClientChoice'>): void {
   ctx.send({
     v: 1, key: `${state.requestId}:1:ack`, chatId: state.chatId, kind: 'text',
-    text: requesterText(state, state.initialRequesterHold ? ROUTING_MESSAGES.statusHeld : LIFECYCLE_MESSAGES.receivedForDesigner), parseMode: 'HTML', class: 'critical',
+    text: acknowledgementText(state), parseMode: 'HTML', class: 'critical',
     tenantId: state.tenantId, taskId: state.taskId,
   });
   sendInitialHoldAlerts(ctx,state);
@@ -441,7 +471,7 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
     return { accepted: true, taskId: prior.taskId, stage: 'manual', rev: 1 };
   }
   const projected = await reportedIfRefused(ctx, () => ctx.run('project:1', () => core.post<{ v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean;
-    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}> }>(
+    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}>;clientChoice?:unknown }>(
     `/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
     { v: 1, expectedRev: 0, rev: 1, key: `${event.requestId}:1:open`, ops: [{ kind: 'createRequest', draft: event.draft }] },
   )), openFailure(event));
@@ -454,6 +484,7 @@ export async function openManualRequest(ctx: OpenContext, core: CoreInternal, ev
     openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
     ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
     ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
+    ...clientChoiceOf(projected.clientChoice),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);
@@ -495,7 +526,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
   }
   const projected = await reportedIfRefused(ctx, () => ctx.run('project:1', () => core.post<{
     v: 1; taskId: string; stage: string; rev: number; autoGenerate: boolean;
-    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}>;
+    requesterHold?:true;officeAlerts?:Array<{chatId:string;text:string}>;clientChoice?:unknown;
     design?: { clientId: string; rawText: string; sourcePlatform: string;
       variant?: { width: number; height: number }; designStudio: boolean; studioOptions?: DesignRunInput['studioOptions'] };
   }>(`/internal/lifecycle/${encodeURIComponent(event.requestId)}/project`,
@@ -511,6 +542,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
       openEventId: event.eventId, openSha256: fingerprint, ...requesterFields(event.draft),
       ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
     ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
+    ...clientChoiceOf(projected.clientChoice),
     };
     ctx.set('lc', manual);
     ctx.setChatMode?.(event.chatId, event.requestId);
@@ -537,6 +569,7 @@ export async function openAutomaticRequest(ctx: AutomaticOpenContext, core: Core
     openEventId: event.eventId, openSha256: fingerprint, runId, designInput, ...requesterFields(event.draft),
     ...(projected.requesterHold ? {initialRequesterHold:{officeAlerts:projected.officeAlerts ?? []}} : {}),
     ...(!projected.requesterHold && projected.officeAlerts?.length ? {initialOfficeAlerts:projected.officeAlerts} : {}),
+    ...clientChoiceOf(projected.clientChoice),
   };
   ctx.set('lc', state);
   ctx.setChatMode?.(event.chatId, event.requestId);

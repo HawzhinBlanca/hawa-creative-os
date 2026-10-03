@@ -41,6 +41,7 @@ import { isDesignerRemark } from './request-remarks.js';
 import { ledgerUpdateId, readOnce } from './requester-intent-model.js';
 import { afterPossessive, startsWithName, stripLeadingMarks } from '../core-helpers.js';
 import { clientPackOf } from './client-packs.js';
+import { titleName } from './request-title.js';
 
 /** The copy the model proposes: data, checked word by word before any of it is used. */
 export interface ProposedCopy { headline: string; lines: string[] }
@@ -542,7 +543,8 @@ export function withoutClientPossessive(headline: string, names: readonly string
  */
 export function copyTitle(headline: string, label: string, clientLabel = false): string {
   const said = ws(stripLeadingMarks(headline));
-  const line = (clientLabel && label && afterPossessive(said, label)) || said;
+  // ADR-284 addendum (live canary 2026-10-03): the name without the date, time and place said after it.
+  const line = titleName((clientLabel && label && afterPossessive(said, label)) || said, 60);
   const cut = line.length <= 60 ? line : `${line.slice(0, 57).replace(/\s+\S*$/u, '') || line.slice(0, 57)}…`;
   return label && !startsWithName(line, label) ? `${label}: ${cut}` : cut;
 }

@@ -38,6 +38,19 @@ export interface NewBriefDecision {
    * per language). Each is opened, projected and replayed exactly as the first.
    */
   siblings?: Array<{ requestId: string; draft: ChatIntake }>;
+  /**
+   * ADR-284 addendum (live canary 2026-10-03): a kept brief opened for the office to choose its organisation
+   * (ADR-235), how the question ended and the language of the answer. The request's first answer then says
+   * both things in one message (RequestLifecycle's acknowledgement), instead of two.
+   */
+  clientChoice?: ClientChoice;
+}
+
+export interface ClientChoice { outcome: 'office' | 'unmatched' | 'expired' | 'timeout'; lang: 'en' | 'ckb' }
+export function parseClientChoice(value: unknown): ClientChoice | undefined {
+  const v = value as Partial<ClientChoice> | null;
+  return v && typeof v === 'object' && ['office', 'unmatched', 'expired', 'timeout'].includes(String(v.outcome)) &&
+    (v.lang === 'en' || v.lang === 'ckb') ? { outcome: v.outcome!, lang: v.lang } : undefined;
 }
 
 /** The draft a new-brief decision recorded for this request: its first request's, or a sibling's. */
@@ -111,8 +124,10 @@ export async function readNewBriefDecision(trx: Kysely<Database>, tenantId: stri
   if (briefAnchor === null) throw new Error('Invalid stored new-brief anchor');
   const deliverables=parseDeliverableEvidence({requestId,siblings:siblings as NewBriefDecision['siblings'],
     deliverableCount:row.payload.deliverableCount,deliverableDetailsRequired:row.payload.deliverableDetailsRequired});
+  const clientChoice = parseClientChoice(row.payload.clientChoice);
   return { requestId, chatId, payloadHash: row.payload_hash, draft: draft as ChatIntake,
     ...deliverables,
+    ...(clientChoice ? { clientChoice } : {}),
     ...(briefAnchor ? { briefAnchor } : {}),
     ...(row.payload.sourceUpdate !== undefined ? { sourceUpdate: row.payload.sourceUpdate } : {}),
     ...(Array.isArray(siblings) && siblings.length ? { siblings: siblings as NewBriefDecision['siblings'] } : {}) };
@@ -129,7 +144,8 @@ export async function recordNewBriefDecision(trx: Kysely<Database>, tenantId: st
         ...(decision.briefAnchor ? { briefAnchor: decision.briefAnchor } : {}),
         ...(decision.sourceUpdate !== undefined ? { sourceUpdate: decision.sourceUpdate } : {}),
         ...parseDeliverableEvidence(decision),
-        ...(decision.siblings?.length ? { siblings: decision.siblings } : {}) })}::jsonb, ${decision.payloadHash}, true)
+        ...(decision.siblings?.length ? { siblings: decision.siblings } : {}),
+        ...(decision.clientChoice ? { clientChoice: decision.clientChoice } : {}) })}::jsonb, ${decision.payloadHash}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
   const stored = await readNewBriefDecision(trx, tenantId, updateId);
   if (!stored) throw new Error('New-brief decision was not stored');
@@ -432,4 +448,12 @@ export async function acknowledgeLateChange(trx: Kysely<Database>, tenantId: str
       'lifecycle_late_change_acknowledged', ${payload}::jsonb,
       ${createHash('sha256').update(payload).digest('hex')}, true)
     ON CONFLICT DO NOTHING`.execute(trx);
+}
+
+/** ADR-284 addendum: how the question of the brief this request opened from ended, when the office chooses. */
+export async function clientChoiceFor(trx: Kysely<Database>, tenantId: string, requestId: string): Promise<ClientChoice | undefined> {
+  const row = (await sql<{ choice: unknown }>`SELECT payload->'clientChoice' AS choice FROM hawa.inbox_events
+    WHERE tenant_id = ${tenantId}::uuid AND source_account_id = 'lifecycle_chat_open'
+      AND payload->>'requestId' = ${requestId} AND payload ? 'clientChoice' LIMIT 1`.execute(trx)).rows[0];
+  return row ? parseClientChoice(row.choice) : undefined;
 }
