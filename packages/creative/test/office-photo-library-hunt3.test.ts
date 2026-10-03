@@ -132,3 +132,22 @@ describe('ingestion edge cases (hunt-3)', () => {
     ]);
   });
 });
+
+describe('retrieval limits (hunt-3)', () => {
+  it('a max that is not a number still returns at most three photos', async () => {
+    const { selectOfficeLibraryPhotos } = await import('../src/studio/office-photo-library.js');
+    const tags = { subjects: ['school'], events: ['field visit'], keywords: [], consent: 'granted' as const, peoplePresent: true, usable: true };
+    const features = { version: 1 as const, meanLuminance: 0.5, sharpness: 0.8, soft: false, quietArea: 'top' as const, quietLuminance: 0.5,
+      bands: { top: 0, bottom: 0, left: 0, right: 0 }, salient: { x: 0.5, y: 0.5 }, dominantColors: [] };
+    const photos = Array.from({ length: 6 }, (_, i) => {
+      const hash = `${i}`.repeat(64).slice(0, 64).replace(/[^0-9a-f]/g, 'a');
+      return { id: `olp_${hash.slice(0, 16)}`, sha256: hash, storedSha256: hash, file: `photos/${hash}.png`, sourceName: `${i}.png`, mimeType: 'image/png' as const,
+        fileBytes: 1, width: 1080, height: 1350, orientation: 'portrait' as const, features, tags, status: 'usable' as const, excludedReasons: [], ingestedAt: '2026-10-03T00:00:00.000Z' };
+    });
+    for (const max of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      const picks = selectOfficeLibraryPhotos({ photos }, { copy: ['School field visit'], width: 1080, height: 1350, max }).picks;
+      expect(picks.length, String(max)).toBeGreaterThanOrEqual(1);
+      expect(picks.length, String(max)).toBeLessThanOrEqual(3);
+    }
+  });
+});

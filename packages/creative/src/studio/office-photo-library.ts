@@ -335,7 +335,9 @@ function coverScale(photo: { width: number; height: number }, brief: { width: nu
  * stays typographic.
  */
 export function selectOfficeLibraryPhotos(library: Pick<OfficePhotoLibrary, 'photos'>, brief: OfficePhotoBrief): OfficePhotoSelection {
-  const max = Math.max(1, Math.min(OFFICE_PHOTO_LIMITS.maxPicks, Math.floor(brief.max ?? OFFICE_PHOTO_LIMITS.maxPicks)));
+  // A max that is not a finite number (NaN compares false with everything, so it lifted the cap) is the default.
+  const asked = Number.isFinite(brief.max) ? Math.floor(brief.max as number) : OFFICE_PHOTO_LIMITS.maxPicks;
+  const max = Math.max(1, Math.min(OFFICE_PHOTO_LIMITS.maxPicks, asked));
   const briefTerms = officePhotoTerms([...brief.copy, ...(brief.eventWords ?? []), brief.tone]);
   const briefTermSet = new Set(briefTerms);
   const briefEvents = officePhotoEvents(briefTerms, brief.eventWords ?? []);
