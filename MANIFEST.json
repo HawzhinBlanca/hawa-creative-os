@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T12:33:39Z",
+  "generatedAt": "2026-10-03T12:44:33Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1354,8 +1354,8 @@
     },
     {
       "path": "adrs/290_sorani_shaping_checked_on_the_raster.md",
-      "sha256": "5c9539ead8f4ce03c6a23fe5006ba336b02eddd6b597f9105368b680fe951d0b",
-      "bytes": 8075
+      "sha256": "34a3c3abe4be83d2e5dc04484402e071fa990a51408efa0bb274e42207fac2fb",
+      "bytes": 8459
     },
     {
       "path": "api/canva-connect.openapi.json",

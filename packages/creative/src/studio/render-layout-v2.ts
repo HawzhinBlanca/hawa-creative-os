@@ -119,6 +119,48 @@ function placementsFor(layout: StudioLayoutV2, options: RenderLayoutOptions): La
 // In-memory cache for loaded fontkit Font objects
 const fontCache = new Map<string, { fingerprint: string; sha256: string; font: any }>();
 
+/**
+ * Ink boxes are read from a second parse of the same bytes, never from the font that shapes (ADR-290).
+ * fontkit caches a glyph object by id with the code points it was first created with, and its Arabic
+ * shaper reads joining types from those code points. Reading a composite glyph's box or outline creates
+ * its components with none: in IBM Plex Sans Arabic Bold the final U+06D5 is built on the heh glyph, so
+ * once a line with U+06D5 had its ink read before any heh was shaped, every later U+0647 shaped as
+ * non-joining and a title measured 4-7% off what Pango draws, decided by what the process drew first.
+ */
+const fontBytes = new WeakMap<object, Buffer>();
+const outlineTwins = new WeakMap<object, any>();
+function outlinesOf(font: any): any {
+  let twin = outlineTwins.get(font);
+  if (!twin) {
+    const bytes = fontBytes.get(font);
+    if (!bytes) throw new Error('Font outlines need the bytes the font was parsed from');
+    twin = fk.create(bytes);
+    outlineTwins.set(font, twin);
+  }
+  return twin;
+}
+type InkBox = { minX: number; minY: number; maxX: number; maxY: number };
+/** One shaped glyph's ink box, in font units. */
+function glyphInkBox(font: any, glyphId: number): InkBox {
+  return outlinesOf(font).getGlyph(glyphId).bbox;
+}
+/** The ink box of a shaped run, in font units: fontkit's GlyphRun.bbox, read from the outline twin. */
+function runInkBox(font: any, run: { glyphs: Array<{ id: number }>; positions: Array<{ xAdvance?: number; yAdvance?: number; xOffset?: number; yOffset?: number }> }): InkBox {
+  const box: InkBox = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  let x = 0, y = 0;
+  run.glyphs.forEach((glyph, i) => {
+    const p = run.positions[i] || {};
+    const b = glyphInkBox(font, glyph.id);
+    box.minX = Math.min(box.minX, b.minX + x + (p.xOffset || 0));
+    box.minY = Math.min(box.minY, b.minY + y + (p.yOffset || 0));
+    box.maxX = Math.max(box.maxX, b.maxX + x + (p.xOffset || 0));
+    box.maxY = Math.max(box.maxY, b.maxY + y + (p.yOffset || 0));
+    x += p.xAdvance || 0;
+    y += p.yAdvance || 0;
+  });
+  return box;
+}
+
 /** Families whose script joins cursively, where letter-spacing is always wrong. */
 export const ARABIC_SCRIPT_FAMILIES = new Set([
   'Noto Sans Arabic',
@@ -356,7 +398,7 @@ const sentinelHashCache = new Map<string, string>();
 /** The part of a fontkit font the ink check reads. */
 interface InkFont {
   unitsPerEm: number;
-  layout(text: string): { advanceWidth: number; bbox: { minX: number; maxX: number }; glyphs: Array<{ id: number }> };
+  layout(text: string): { advanceWidth: number; glyphs: Array<{ id: number }>; positions: Array<{ xAdvance?: number; yAdvance?: number; xOffset?: number; yOffset?: number }> };
 }
 
 /**
@@ -473,7 +515,8 @@ export function probeFontInkWidth(
   const run = font.layout(sample);
   const scale = sizePx / font.unitsPerEm;
   const expectedAdvancePx = run.advanceWidth * scale;
-  const expectedInkPx = (run.bbox.maxX - run.bbox.minX) * scale;
+  const ink = runInkBox(font, run);
+  const expectedInkPx = (ink.maxX - ink.minX) * scale;
   const png = rasteriseProbe(inkProbeSvg(family, sample, sizePx, options.fontWeight), rsvg, fontconfigFile);
   if (!png) return unmeasured('no-rasteriser', 'the rasteriser is unavailable', sample, script);
 
@@ -979,6 +1022,7 @@ function loadFontPathEntry(fontPath: string) {
   if (fingerprint() !== before) throw new Error(`Font changed while loading: ${fontPath}`);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const font = cached?.sha256 === sha256 ? cached.font : fk.create(bytes);
+  if (!fontBytes.has(font)) fontBytes.set(font, bytes);
   if (fontCache.size >= 128 && !fontCache.has(fontPath)) fontCache.delete(fontCache.keys().next().value!);
   const entry = { fingerprint: before, sha256, font };
   fontCache.set(fontPath, entry);
@@ -1824,7 +1868,7 @@ export function measureLineInkClearance(
       let pen = 0;
       run.glyphs.forEach((glyph: any, i: number) => {
         const pos = run.positions[i] || { xAdvance: 0, xOffset: 0, yOffset: 0 };
-        const bb = glyph.bbox;
+        const bb = glyphInkBox(font, glyph.id);
         if (bb && Number.isFinite(bb.minX) && bb.maxX > bb.minX && bb.maxY > bb.minY) {
           const gx = start + (pen + (pos.xOffset || 0)) * scale + i * spacingPx;
           boxes.push({
@@ -1933,7 +1977,7 @@ function renderTextElementToSvg(
   for (const line of shaped ? [] : lines) {
     if (!line) continue;
     try {
-      const bbox = font.layout(line).bbox;
+      const bbox = runInkBox(font, font.layout(line));
       if (bbox && Number.isFinite(bbox.maxY)) inkAbove = Math.max(inkAbove, bbox.maxY * scale);
       if (bbox && Number.isFinite(bbox.minY)) inkBelow = Math.max(inkBelow, -bbox.minY * scale);
     } catch {

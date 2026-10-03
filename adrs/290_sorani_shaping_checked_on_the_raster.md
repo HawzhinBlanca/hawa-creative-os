@@ -96,9 +96,13 @@ with the bundled faces pinned (ADR-118).
     is checked at its planned size.
   - The check is synchronous: up to about a second of Core's event loop per Canva capture.
 - **Open:**
-  - The renderer's own fontkit measurement (`render-layout-v2.ts`) shares one instance between layout
-    and bbox reads, so it has the same order dependence: after rendering a design with U+06D5 in IBM
-    Plex Sans Arabic Bold, `measureMaxLineWidths` measured another title at 507 px instead of 529 in the
-    same process. Filed as a separate task; not changed here.
+  - ~~The renderer's own fontkit measurement shares one instance between layout and bbox reads.~~
+    Resolved in release-3: `render-layout-v2.ts` reads every ink box (the ink-width probe, line ink
+    clearance, the drawn block's ink extent) from an outline twin parsed from the same bytes, never from
+    the shaping font. Reproduced before the fix in a fresh process: one line ending in U+06D5 had its
+    ink read first, then a title with heh measured 541 px against 519 clean
+    (`packages/creative/test/font-outline-isolation.test.ts`). The direction depends on the line read
+    first (+4% or -6.5% in a direct fontkit probe), so wraps, fits and the copy-fit check were decided
+    by what the long-running Core process happened to draw earlier.
   - Make the check blocking only after it has run on live exports for a while.
   - Re-run the calibration inside the core image.
