@@ -151,3 +151,23 @@ describe('the page and cover composer promises hard QA\'s alignment check, as th
     }
   }
 });
+
+describe('a landscape poster\'s display title reaches the Canva deck', () => {
+  // Before: the composers size a title by the width (KAAE: up to 0.2 of it, 384px on 1920x1080) and the
+  // deck refused any size over 0.25 of the height (270px there): a one-word 1920x1080 poster titled at
+  // 296px, and its page at 346px beside a wide logo, threw "Unsupported font or unreadable size" at the transfer.
+  const LOGO = readFileSync(new URL('../assets/logos/kaae-official-logo.png', import.meta.url));
+  const sha256 = createHash('sha256').update(LOGO).digest('hex');
+  const lines = ['Workshop'];
+  for (const variant of [...POSTER_VARIANTS, 'page'] as const) {
+    it(variant, async () => {
+      // The page's title reaches 346px beside a wide 3.2:1 logo (its header sets a smaller scale with a square one).
+      const base = input(lines, ['title'], { width: 1920, height: 1080, logoAspect: variant === 'page' ? 3.2 : 1 });
+      const l = variant === 'page' ? composeGrammarLayout({ ...base, variant: 'brand_card' }) : composePosterLayout({ ...base, variant });
+      expect(l.text[0].fontSize).toBeGreaterThan(0.25 * 1080);
+      const deck = await encodeStudioTransferV2(l, lines, { bytes: LOGO, mimeType: 'image/png', sha256 });
+      const check = checkCanvaPptx(deck.bytes, lines, { fontsByIndex: [l.text[0].fontFamily], uppercaseByIndex: [l.text[0].textTransform === 'uppercase'] });
+      expect(check.copyPass && check.fontPass).toBe(true);
+    });
+  }
+});

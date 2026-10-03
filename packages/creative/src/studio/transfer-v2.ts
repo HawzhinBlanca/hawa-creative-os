@@ -412,7 +412,9 @@ export async function encodeStudioTransferV2(
     }
   };
 
-  const maxFontSize = Math.max(240, Math.round(0.25 * layout.height));
+  // A sanity bound on the canvas's long side: the composers size a display title by the width (KAAE up
+  // to 0.2 of it), which on a landscape canvas is over a quarter of the height.
+  const maxFontSize = Math.max(240, Math.round(0.25 * Math.max(layout.width, layout.height)));
   for (const t of layout.text) {
     bounds(t);
     hex(t.color);
