@@ -100,6 +100,17 @@ describe('the nightly canary runner (ADR-240)', () => {
     expect(s.latest()).toMatchObject({ status: 'skipped', reason: 'a deploy holds the deploy lock' });
   });
 
+  it('names a late nightly backup, not a deploy, when the backup holds the deploy lock', async () => {
+    const s = setup();
+    const holder = spawn('python3', [lock, '--lock', s.f('deploy.lock'), '--', 'bash', '-c', 'echo held; exec /bin/sleep 5', 'infra/backup/nightly_backup.sh']);
+    await new Promise((r) => holder.stdout.once('data', r));
+    const res = s.run(`touch '${s.f('ran')}'`);
+    holder.kill();
+    expect(res.status, res.stderr).toBe(0);
+    expect(fs.existsSync(s.f('ran'))).toBe(false);
+    expect(s.latest()).toMatchObject({ status: 'skipped', reason: 'the nightly backup holds the deploy lock (it started late)' });
+  });
+
   it('holds the deploy lock while it runs, so a deploy that starts meanwhile waits for it', async () => {
     const s = setup();
     const run = spawn(BASH, [runner], { env: { ...s.env, HAWA_CANARY_RUN: '/bin/sleep 3' } });
