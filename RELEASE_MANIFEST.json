@@ -1,7 +1,7 @@
 {
   "manifestVersion": "2.0.0",
   "evidenceKind": "source_candidate",
-  "generatedAt": "2026-10-03T21:43:30+03:00",
+  "generatedAt": "2026-10-03T22:32:25+03:00",
   "targetEnvironment": "production",
   "topology": {
     "canonical": "infra/docker/docker-compose.prod.yml",
@@ -20,9 +20,9 @@
     ]
   },
   "build": {
-    "commit": "bd64a28020c6816f23039e40ef367505aa40b748",
+    "commit": "3a8af188cca850ed2c056b68be4af39fc60f8ccd",
     "treeClean": true,
-    "commitTimestamp": "2026-10-03T21:43:30+03:00",
+    "commitTimestamp": "2026-10-03T22:32:25+03:00",
     "branch": "codex/hawzhin-app-integration"
   },
   "migrations": {
@@ -90,5 +90,5 @@
       "packages/qa/src/copy-validator.ts": "a7ecf1fd204623e29fb9ab9fef3c4aed9001776a7760f51c2c73dd6d92dc06d6"
     }
   },
-  "sha256": "743c9faa38fda77d553284ae7b2311657a0d95553a2a4c7ff9c366fde42d0748"
+  "sha256": "beebb85c67903ebfa6027b144a3179e72edbfff0731f7ba9b7b5045b776bef37"
 }
