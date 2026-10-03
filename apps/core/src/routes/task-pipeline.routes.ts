@@ -41,20 +41,29 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
     if (!auth.authenticated) {
       return problem(c, 401, 'Unauthorized', 'Authentication required to route task');
     }
+    // Routing locks the task's client: an office role's decision, made on a task the caller can read.
+    if (!['operator', 'administrator', 'art_director', 'creative_director', 'designer'].includes(auth.role || '')) {
+      return problem(c, 403, 'Forbidden', 'An office operator or designer is required to route a task.');
+    }
     const lifecycleRefusal = await rejectLegacyTaskDesignWrite(ctx, c, auth);
     if (lifecycleRefusal) return lifecycleRefusal;
     const taskId = c.req.param('taskId');
     const tenantId = auth.tenantId || '00000000-0000-4000-a000-000000000001';
-    let task = await readCurrentTask(taskId);
+    const identity = { tenantId, userId: auth.userId || '', role: auth.role || 'operator' };
+    // With a database the task is the one the caller can read: it was read as the system operator, and
+    // a failed caller lookup was ignored.
+    let task = await readCurrentTask(taskId, identity);
     let dbTask: any = null;
     if (taskRepo && db) {
       try {
-        dbTask = await withRlsContext(db, { tenantId, userId: auth.userId, role: auth.role || 'operator' }, async (trx) => {
+        dbTask = await withRlsContext(db, identity, async (trx) => {
           return await taskRepo.findById(taskId, tenantId, trx);
         });
       } catch (err) {
         log.error('[core:route:lookup] DB task error:', err);
+        return problem(c, 503, 'Database Unavailable', 'The task could not be read; try again');
       }
+      if (!dbTask) return problem(c, 404, 'Task Not Found');
     }
     if (!task && !dbTask) return problem(c, 404, 'Task Not Found');
 
@@ -79,16 +88,7 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
     const trans = sm.transition('BRIEFING', { type: 'user', id: auth.actorId || 'operator' }, body.reason || `Client locked to ${body.clientId}`);
     if (!trans.ok) return problem(c, 409, 'Conflict', trans.error.message);
 
-    if (task) {
-      task.clientId = body.clientId;
-      task.clientScopeLocked = true;
-      task.status = 'BRIEFING';
-      task.updatedAt = new Date().toISOString();
-      if (!events.has(taskId)) events.set(taskId, []);
-      events.get(taskId)?.push(trans.value);
-    }
-
-    // Update database record if database is connected
+    // Update database record if database is connected; the change is reported only once it is recorded.
     let routedVersion: number | null = null;
     if (db && taskRepo) {
       try {
@@ -114,7 +114,17 @@ export function registerTaskPipelineRoutes(ctx: RouteContext): void {
         });
       } catch (err) {
         log.error('[core:route] DB update error:', err);
+        return problem(c, 503, 'Durable Storage Unavailable', 'The task was not routed; nothing changed. Try again.');
       }
+    }
+
+    if (task) {
+      task.clientId = body.clientId;
+      task.clientScopeLocked = true;
+      task.status = 'BRIEFING';
+      task.updatedAt = new Date().toISOString();
+      if (!events.has(taskId)) events.set(taskId, []);
+      events.get(taskId)?.push(trans.value);
     }
 
     broadcastTransition(taskId, currentStatus, 'BRIEFING', routedVersion);

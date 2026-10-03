@@ -360,7 +360,8 @@ const DnaClientScreen: React.FC<{
       ...currentDna,
       colors: [...currentDna.colors, newColor],
     };
-    await saveDnaChanges(updated, `Added color swatch "${newColor.name}" (${newColor.hex})`);
+    // A refused save keeps what was typed (saveDnaChanges shows why).
+    if (!(await saveDnaChanges(updated, `Added color swatch "${newColor.name}" (${newColor.hex})`))) return;
     setNewSwatchName('');
     setShowAddSwatch(false);
   };
@@ -408,7 +409,7 @@ const DnaClientScreen: React.FC<{
         ...newColors,
       ],
     };
-    await saveDnaChanges(updated, 'Auto-extracted and applied brand palette from logo');
+    if (!(await saveDnaChanges(updated, 'Auto-extracted and applied brand palette from logo'))) return;
     setShowLogoDropzone(false);
     setExtractedPaletteData(null);
   };
@@ -428,7 +429,7 @@ const DnaClientScreen: React.FC<{
         prohibitedPhrases: [...currentDna.guidelines.prohibitedPhrases, phrase],
       },
     };
-    await saveDnaChanges(updated, `Added prohibited phrase "${phrase}" to deterministic QA filters`);
+    if (!(await saveDnaChanges(updated, `Added prohibited phrase "${phrase}" to deterministic QA filters`))) return;
     setNewPhrase('');
   };
 
@@ -456,7 +457,7 @@ const DnaClientScreen: React.FC<{
         requiredDisclaimers: [...(currentDna.guidelines.requiredDisclaimers || []), disclaimer],
       },
     };
-    await saveDnaChanges(updated, 'Registered required disclaimer (Invariant #5 protected)');
+    if (!(await saveDnaChanges(updated, 'Registered required disclaimer (Invariant #5 protected)'))) return;
     setNewDisclaimer('');
   };
 
@@ -471,7 +472,7 @@ const DnaClientScreen: React.FC<{
         layoutRules: [...currentDna.guidelines.layoutRules, rule],
       },
     };
-    await saveDnaChanges(updated, 'Added layout principle to deterministic QA engine');
+    if (!(await saveDnaChanges(updated, 'Added layout principle to deterministic QA engine'))) return;
     setNewRule('');
   };
 
@@ -493,7 +494,7 @@ const DnaClientScreen: React.FC<{
   // Dismiss candidate rule
   const handleDismissCandidate = async (ruleId: string) => {
     try {
-      const res = await apiClient.clients.dismissCandidate(selectedClientId, ruleId, 'Dismissed by art director');
+      const res = await apiClient.clients.dismissCandidate(selectedClientId, ruleId, 'Dismissed in Hawa Desk');
       // Core answers 200 with dismissed: false when it has no such rule.
       if (res?.dismissed !== true) {
         setErrorNotice(`Core has no candidate rule ${ruleId} to dismiss, so it stays open.`);
@@ -1473,9 +1474,10 @@ const DnaClientScreen: React.FC<{
                     className="pill bad"
                     style={{ fontSize: 12, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 6 }}
                   >
-                    <span>{phrase}</span>
+                    <span dir="auto">{phrase}</span>
                     <button
                       onClick={() => handleRemoveProhibitedPhrase(phrase)}
+                      aria-label={`Remove prohibited phrase ${phrase}`}
                       style={{
                         background: 'transparent',
                         border: 'none',
@@ -1716,6 +1718,7 @@ const DnaClientScreen: React.FC<{
               </div>
               <button
                 onClick={() => setShowSnapshotModal(false)}
+                aria-label="Close"
                 style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}
               >
                 ✕
@@ -1813,6 +1816,7 @@ const DnaClientScreen: React.FC<{
               </div>
               <button
                 onClick={() => setInspectingSnapshot(null)}
+                aria-label="Close"
                 style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}
               >
                 ✕

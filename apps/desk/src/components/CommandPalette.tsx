@@ -451,7 +451,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       >
                         {item.category}
                       </span>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: '#f9fafb', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <span dir="auto" style={{ fontSize: 14, fontWeight: 600, color: '#f9fafb', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {item.title}
                       </span>
                     </div>

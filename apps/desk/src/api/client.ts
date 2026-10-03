@@ -378,8 +378,10 @@ class HawaApiClient {
   public readonly telegram = {
     status: () => this.request<any>('/adapters/telegram/status'),
     webhookInfo: () => this.request<any>('/adapters/telegram/webhook/info'),
+    // Pending updates are the requesters' unread messages, which the worker's poller reads once the
+    // webhook is gone: they are kept, never dropped.
     deleteWebhook: () =>
-      this.request<any>('/adapters/telegram/webhook/delete', { method: 'POST', body: JSON.stringify({ dropPendingUpdates: true }) }),
+      this.request<any>('/adapters/telegram/webhook/delete', { method: 'POST', body: JSON.stringify({ dropPendingUpdates: false }) }),
   };
 
   public readonly system = {

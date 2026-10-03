@@ -222,10 +222,27 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   });
   const detail = detailQuery.data?.id === selectedTaskId ? detailQuery.data : undefined;
 
+  // Another task (or revision) on screen: nothing typed or read for the previous one may reach it. Notes
+  // typed for one task were sent as the next task's revision request, and a late export read of one
+  // task was pinned to the next task's approval.
+  const approvalRead = useRef(0);
   useEffect(() => {
     setIsApprovalModalOpen(false);
     setIsRevisionModalOpen(false);
     setIsRejectionModalOpen(false);
+    approvalRead.current++;
+    setApprovalExports({ state: 'loading' });
+    setPinnedExportIds([]);
+    setRtlReviewed(false);
+    setRevisionNotes('');
+    setRevisionScope('');
+    setRevisionCategory('');
+    setRevisionTargets('');
+    setRevisionPriority('');
+    setRevisionReusable(false);
+    setRejectionCategory(undefined);
+    setRejectionReason('');
+    setCanvaLinkInput('');
   }, [selectedTaskId, reviewRevisionId]);
   const reviewBlocked = Boolean(initialTaskId && reviewRevisionId && selectedTaskId === initialTaskId &&
     (!detail?.latestRevisionId || (detail.latestRevisionId !== reviewRevisionId && confirmedReviewRevision !== detail.latestRevisionId)));
@@ -525,6 +542,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
   const openApprovalModal = async () => {
     if (reviewBlocked || !selectedTask) return;
     const taskId = selectedTask.id;
+    const ticket = ++approvalRead.current;
     setIsApprovalModalOpen(true);
     setApprovalExports({ state: 'loading' });
     setPinnedExportIds([]);
@@ -533,6 +551,8 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       const state = await apiClient.canva.taskState(taskId);
       return Array.isArray(state?.artifacts) ? (state.artifacts as StoredExport[]) : [];
     });
+    // A read answered after another task (or a newer opening) took the modal belongs to no one.
+    if (ticket !== approvalRead.current) return;
     setApprovalExports(reading);
     if (reading.state === 'known') setPinnedExportIds(defaultPins(reading.value, selectedTask.canvaBinding ? selectedTask.qaReport?.exportArtifactId : undefined, selectedTask.canvaBinding ? selectedTask.qaReport?.captureVersion : undefined));
   };
@@ -543,7 +563,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
     mutationFn: (input: { taskId: string; revisionId: string; pinnedExportIds: string[]; requestOwned: boolean; rtlVisualReview?: { confirmed: true; exportSha256: string }; actionKey: string; reservation: ReservedDecisionAction }) =>
       apiClient.tasks.recordDecision<{ decisionId?: string } | null>(input.taskId, input.revisionId, {
         action: 'approve',
-        reason: 'Approved by art director',
+        reason: 'Approved in Hawa Desk',
         pinnedExportIds: input.pinnedExportIds,
         ...(input.rtlVisualReview ? { rtlVisualReview: input.rtlVisualReview } : {}),
       }, input.reservation.actionId),
@@ -742,35 +762,18 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                     Sign Out
                   </button>
                 )}
-                <button
-                  className="btn primary btn-sm work-queue-new-btn"
-                  onClick={async () => {
-                    if (onNewTask) {
-                      onNewTask();
-                      return;
-                    }
-                    try {
-                      setActionLoading(true);
-                      const res: any = await apiClient.tasks.create({
-                        title: `Campaign Brief ${new Date().toLocaleDateString()}`,
-                        description: 'Intake campaign instructions for client brand review',
-                        priority: 'high',
-                      });
-                      const createdTask = res.task || res;
-                      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
-                      if (createdTask?.id) setSelectedTaskId(createdTask.id);
-                      showToast(`Created server task: ${createdTask?.id || 'new'}`, 'success');
-                    } catch (err: any) {
-                      showToast(`Task creation failed: ${err.message}`, 'error');
-                    } finally {
-                      setActionLoading(false);
-                    }
-                  }}
-                  disabled={actionLoading}
-                  aria-label="Create New Task"
-                >
-                  + New Task
-                </button>
+                {/* A new request is written in the request form (App.tsx). Without it there is no button: the
+                    fallback created a task with an invented title and description ("Intake campaign
+                    instructions for client brand review"), shown as the requester's submitted copy. */}
+                {onNewTask && (
+                  <button
+                    className="btn primary btn-sm work-queue-new-btn"
+                    onClick={onNewTask}
+                    aria-label="Create New Task"
+                  >
+                    + New Task
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1326,7 +1329,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
                       {selectedTask.description ? (
                         <div className="copy-block-card">
                           <div className="copy-label">Original submitted request</div>
-                          <div className="copy-value-en" style={{whiteSpace:'pre-wrap'}}>{selectedTask.description}</div>
+                          <div className="copy-value-en" dir="auto" style={{whiteSpace:'pre-wrap'}}>{selectedTask.description}</div>
                         </div>
                       ) : (
                         <SubmittedCopy
@@ -1551,6 +1554,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
             <label className="hawa-revision-label" htmlFor="revision-comment">Requested change</label>
             <textarea
               id="revision-comment"
+              dir="auto"
               className="hawa-textarea"
               rows={4}
               maxLength={2000}
@@ -1683,7 +1687,7 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
             </select>
             <label className="hawa-revision-label" htmlFor="rejection-reason">Reason</label>
             <textarea id="rejection-reason" className="hawa-textarea" rows={4} maxLength={2000}
-              value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} />
+              dir="auto" value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
               <button className="btn" onClick={() => setIsRejectionModalOpen(false)}>Cancel</button>
               <button className="btn primary" onClick={handleReject}

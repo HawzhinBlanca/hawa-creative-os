@@ -46,7 +46,7 @@ export async function submitManualTask(draft: Omit<ActiveDraft, 'savedAt'>, pend
   try {
     response = await fetch('/v1/tasks', { method: 'POST', headers: {
       'Content-Type': 'application/json', 'Idempotency-Key': pending.key, ...getAuthHeaders(),
-    }, body: pending.body, signal: AbortSignal.timeout(30000) });
+    }, body: pending.body, credentials: 'same-origin', signal: AbortSignal.timeout(30000) });
   } catch {
     throw new Error('The server result is unconfirmed. Your full draft is retained. Retry unchanged to avoid a duplicate task.');
   }

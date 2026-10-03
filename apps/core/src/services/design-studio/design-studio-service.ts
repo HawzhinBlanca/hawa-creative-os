@@ -497,6 +497,16 @@ export class DesignStudioService {
     }
   }
 
+  /** A task made from a website (customer) request: owned by a customer account, or created by the web channel. */
+  private async isWebsiteTask(s: Scope, taskId: string): Promise<boolean> {
+    const row = await this.tx(s, async (db) => (await sql<{ customer: string | null; platform: string | null }>`SELECT t.customer_account_id AS customer,
+      (SELECT e.data->'payload'->>'sourcePlatform' FROM hawa.task_events e WHERE e.task_id=t.id AND e.tenant_id=t.tenant_id AND e.event_type='task.created'
+        ORDER BY e.aggregate_version LIMIT 1) AS platform
+      FROM hawa.tasks t WHERE t.tenant_id=${s.tenantId}::uuid AND t.id=${taskId}::uuid`.execute(db)).rows[0]);
+    if (!row) throw new Error('The task could not be read');
+    return Boolean(row.customer) || row.platform === 'hawzhin_web';
+  }
+
   /** The image the brief reads as a reference: the latest one the request carries, or undefined. */
   private async attachedImage(s: Scope, taskId: string): Promise<string | undefined> {
     const images = await this.requestImages(s, taskId);
@@ -1601,6 +1611,7 @@ export class DesignStudioService {
         ctx.photoSelection = ctx.webPhotoPolicy ? customerPhotoSelection(ctx.webPhotoPolicy,ctx.instructions,ctx.photos?.length ?? 0) : recordedPhotoSelection(stages.brief, ctx.photos?.length ?? 0); // ADR-157
         // ADR-280: a request with no picture at all may get the office's own archive photos (flag, default off).
         await attachOfficeLibraryPhotos(ctx, stages, { status: run.status, requesterImages: images.length, request: run.request,
+          websiteRequest: () => this.isWebsiteTask(s, run.task_id),
           parentRecord: async (parentTaskId) => { const parent = await this.parentWinner(s, parentTaskId).catch(() => undefined);
             return parent ? runStages((await this.repo.getRunById(parent.runId, s.tenantId).catch(() => undefined)) ?? {}).officePhotoLibrary : undefined; } });
 

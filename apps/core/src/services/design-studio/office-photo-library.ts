@@ -3,6 +3,7 @@ import {
   imagePixelSize,
   loadOfficeLibraryPhoto,
   officePhotoClientDir,
+  officePhotoExclusions,
   officePhotoLibraryRoot,
   readOfficePhotoLibrary,
   selectOfficeLibraryPhotos,
@@ -71,6 +72,12 @@ export interface OfficeLibraryHookInput {
   requesterImages: number;
   /** The run's request, for a revision's parent. */
   request: unknown;
+  /**
+   * Whether the request came from the website (a customer's own request). A website request that sent
+   * no photo carries no webPhotoPolicy, so the context alone cannot tell; this asks the task's origin.
+   * A failed answer counts as a website request: the archive is then not used.
+   */
+  websiteRequest?: () => Promise<boolean>;
   /** The office-library record of a revision's parent run, if any. */
   parentRecord?: (parentTaskId: string) => Promise<unknown>;
   env?: Record<string, string | undefined>;
@@ -78,6 +85,18 @@ export interface OfficeLibraryHookInput {
 }
 
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
+
+/**
+ * The reason a run records (and the Desk shows). The library's own refusals name no path; a filesystem
+ * error does ("EACCES: permission denied, open '/srv/…/library.json'"), so it is logged and recorded by
+ * its code only.
+ */
+function recordedReason(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/^OFFICE_PHOTO_[A-Z_]+:/.test(message)) return message;
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  return `The photo library could not be read${code ? ` (${code})` : ''}.`;
+}
 const SELECTION = { mode: 'choose', minimum: 1 } as const;
 
 function isRecord(value: unknown): value is OfficeLibraryRunRecord {
@@ -104,6 +123,12 @@ async function loadRecorded(clientDir: string, library: OfficePhotoLibrary, phot
   for (const p of photos) {
     const entry = library.photos.find((e) => e.id === p.id && e.storedSha256 === p.storedSha256);
     if (!entry) throw new Error(`OFFICE_PHOTO_UNAVAILABLE: ${p.id} is no longer in the library as it was chosen`);
+    // The rules are applied again on every load, not only when the photo was chosen: a photo the office
+    // has since taken back (consent withdrawn, marked not usable) leaves the run and its revisions.
+    const withdrawn = [...new Set([...officePhotoExclusions(entry), ...entry.excludedReasons])];
+    if (withdrawn.length || entry.status !== 'usable') {
+      throw new Error(`OFFICE_PHOTO_UNAVAILABLE: ${p.id} may no longer be used (${withdrawn.join(', ') || 'excluded_by_office'})`);
+    }
     const { bytes } = await loadOfficeLibraryPhoto(clientDir, entry);
     out.push(contentPhoto(entry, bytes));
   }
@@ -121,6 +146,7 @@ export async function attachOfficeLibraryPhotos(ctx: StageContext, stages: Recor
   if (ctx.webPhotoPolicy) return;
   if (input.status === 'briefing') return;
   if (input.requesterImages > 0 || ctx.photos?.length || ctx.attachedImage || ctx.reference) return;
+  if (input.websiteRequest && await input.websiteRequest().catch(() => true)) return;
 
   let clientDir: string;
   try { clientDir = officePhotoClientDir(officePhotoLibraryRoot(env, input.cwd), ctx.clientId); } catch { return; }
@@ -143,8 +169,8 @@ export async function attachOfficeLibraryPhotos(ctx: StageContext, stages: Recor
   try {
     read = await readOfficePhotoLibrary(clientDir);
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
-    log.warn(`[office-photo-library] run ${ctx.runId}: library unreadable (${reason})`);
+    log.warn(`[office-photo-library] run ${ctx.runId}: library unreadable (${err instanceof Error ? err.message : String(err)})`);
+    const reason = recordedReason(err);
     stages.officePhotoLibrary = { ...(carried ?? {}), version: 1, provenance: 'office_library', status: 'unavailable', clientId: ctx.clientId, stage: carried?.stage ?? input.status, photos: carried?.photos ?? [], reason } satisfies OfficeLibraryRunRecord;
     return;
   }
@@ -164,7 +190,7 @@ export async function attachOfficeLibraryPhotos(ctx: StageContext, stages: Recor
       stages.officePhotoLibrary = carried;
     } catch (err) {
       ctx.photos = undefined;
-      stages.officePhotoLibrary = { ...carried, status: 'unavailable', reason: err instanceof Error ? err.message : String(err) };
+      stages.officePhotoLibrary = { ...carried, status: 'unavailable', reason: recordedReason(err) };
     }
     return;
   }
@@ -198,7 +224,7 @@ export async function attachOfficeLibraryPhotos(ctx: StageContext, stages: Recor
     stages.officePhotoLibrary = { ...base, status: 'attached', photos, photoSelection: { ...SELECTION } };
   } catch (err) {
     ctx.photos = undefined;
-    stages.officePhotoLibrary = { ...base, status: 'unavailable', photos, reason: err instanceof Error ? err.message : String(err) };
+    stages.officePhotoLibrary = { ...base, status: 'unavailable', photos, reason: recordedReason(err) };
   }
 }
 

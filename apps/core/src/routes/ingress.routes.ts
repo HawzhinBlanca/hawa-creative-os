@@ -149,8 +149,16 @@ export function registerIngressRoutes(ctx: RouteContext) {
       return problem(c, 400, 'Missing Field', 'messageEventId is required');
     }
 
-    const tenantId = (body.tenantId && isValidUuid(body.tenantId)) ? body.tenantId : (auth.tenantId || defaultTenantId);
-    const userId = (body.userId && isValidUuid(body.userId)) ? body.userId : (auth.userId || operatorUserId);
+    // The task is written as the caller, in the caller's tenant: row-level security keys on both. As at
+    // /ingress/unified, only an administrator may name another tenant or user (office bootstrap and
+    // fixtures); any other role naming one was creating tasks in another tenant, or as another person.
+    const namedTenant = typeof body.tenantId === 'string' && isValidUuid(body.tenantId) ? body.tenantId : null;
+    const namedUser = typeof body.userId === 'string' && isValidUuid(body.userId) ? body.userId : null;
+    if (auth.role !== 'administrator' && ((namedTenant && namedTenant !== auth.tenantId) || (namedUser && namedUser !== auth.userId))) {
+      return problem(c, 403, 'Forbidden', 'A task is promoted as the signed-in user, in their own tenant.');
+    }
+    const tenantId = (auth.role === 'administrator' && namedTenant) || auth.tenantId || defaultTenantId;
+    const userId = (auth.role === 'administrator' && namedUser) || auth.userId || operatorUserId;
 
     if (db && taskRepo) {
       try {
@@ -176,7 +184,8 @@ export function registerIngressRoutes(ctx: RouteContext) {
         );
         return c.json({ ok: true, promoted: true, task: taskAggregate.task }, 201);
       } catch (err: any) {
-        return problem(c, 500, 'Promotion Failed', err.message);
+        log.error('[core:ingress:promote] promotion failed:', err?.message || err);
+        return problem(c, 500, 'Promotion Failed', 'The message could not be promoted to a task.');
       }
     }
 
