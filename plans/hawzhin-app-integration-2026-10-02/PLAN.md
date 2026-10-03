@@ -319,3 +319,22 @@ ADR279 second native lane retains13/0 browser,4/6 worker,23/1 Core; UNVERIFIED_D
 ## Six-photo native final checkpoint — 2026-10-03
 
 Website79c388c / tested engine371e18a9:24 Core/13 actual browser intake/10 restricted worker/9 browser readback pass. Six exact originals/order/task files/all policy survive; same-file replay retains six receipts and foreign-member attachment is refused. Exact native DesignRun MODEL_NOT_CONFIGURED/backing-off remains a providerless wait, not generation. Two native failures and both mounted red assertions retained; all three fixtures and private inputs removed, ten pre-existing containers unchanged. Full8288/0/67,750 passing files/6 skipped,86 connected/757 typed roots/lint pass. Documentation-only final changes; runtime equals tested371e18a9. CUSTOMER_PHOTO_HTTP_PROOF.json. Real provider/Canva/creative/native/human/hosted/recovery/coverage/CI/hosting/cutover remain open.
+
+
+## Actual customer model failure and standard constraints — 2026-10-03, ADR292
+
+Website1263be2 retains56 actual native transport controls and15 no-network relay
+controls. Eight real Sol calls ($0.0956035 pinned quote) produced no valid design:
+three standard proposals/repairs violated story bounds. Typed website photos were
+retained, but their intent was absent from brief/standard layout prompts. This is
+failure evidence, not native Canva/customer/human admission.
+
+ADR292 repairs the prompt/normalization agreement with existing story hard QA,
+brief/standard photo directives, and flexible automatic website coverage. Exact
+copy, media ownership, hard validation and v3 profile admission remain unchanged.
+Four initial red checks, two brief red checks and one automatic-policy red check
+are retained. Rebuilt182 connected checks/759 strict roots/lint pass; initial full
+8296/1/67 has the correct unsealed release-manifest refusal. Clean seal/full/native
+repeat and the Claude release-3 merge (including its new bidi-js dependency) remain
+pending. No deployment or human/quality/Canva/source-success claim.
+Evidence: STANDARD_CUSTOMER_STORY_PROOF.json and website REAL_PROVIDER_CUSTOMER_PROOF.json.

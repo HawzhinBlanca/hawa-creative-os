@@ -152,8 +152,16 @@ export function photoSelectionPrompt(selection: PhotoSelection | undefined, phot
 
 /** Explicit website controls outrank descriptive words; models cannot drop a source photo by reclassifying it. */
 export function customerPhotoSelection(policy:CustomerPhotoPolicy|undefined,instructions:string,photoCount:number):PhotoSelection {
-  if(!policy || policy.usage.mode==='auto') return photoSelectionFromInstructions(instructions,photoCount);
+  if(!policy) return photoSelectionFromInstructions(instructions,photoCount);
   if(policy.photoCount!==photoCount) throw new Error('The admitted customer photo set changed');
+  if(policy.usage.mode==='auto') {
+    const selected=photoSelectionFromInstructions(instructions,photoCount);
+    // Website automatic use follows the owner's flexible-composition direction.
+    // Preserve an explicit all/count phrase; a legacy implicit-all default must
+    // not force every upload into a non-recipe standard composition.
+    return selected.mode==='all' && !selected.insisted
+      ? {mode:'choose',minimum:Math.min(1,photoCount),matched:'Automatic website composition'} : selected;
+  }
   if(policy.usage.mode==='all')return {mode:'all',minimum:photoCount,insisted:true};
   if(policy.usage.mode!=='count')throw new Error('Invalid customer photo use');
   const count=policy.usage.count;

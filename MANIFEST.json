@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T12:58:19Z",
+  "generatedAt": "2026-10-03T14:20:52Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 920,
+  "fileCount": 922,
   "files": [
     {
       "path": ".dockerignore",
@@ -1318,6 +1318,11 @@
       "bytes": 3003
     },
     {
+      "path": "adrs/292_standard_customer_story_constraints.md",
+      "sha256": "878871cd6d418224a261ff87ac7c6aa6dcff2a9f18ecc93d86971d3acbda13a9",
+      "bytes": 2205
+    },
+    {
       "path": "api/canva-connect.openapi.json",
       "sha256": "f8d01ef69d3ef67b8119c5731972887f0815002a03a14075475d28ed4519d74f",
       "bytes": 48060
@@ -2399,8 +2404,13 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/PLAN.md",
-      "sha256": "1c85836be1e4d3741241a74b41d335e4f93688faa10e7569ebfd713af6283534",
-      "bytes": 29892
+      "sha256": "750484b1c348c0b8ce16e743cd3d880a332ccfff1d03dd44b80e436f51e94343",
+      "bytes": 31099
+    },
+    {
+      "path": "plans/hawzhin-app-integration-2026-10-02/STANDARD_CUSTOMER_STORY_PROOF.json",
+      "sha256": "2809947c9cfae261933e3f56aa58789c3cf5ab0f3da5afb8e4e71e4ca93af435",
+      "bytes": 4974
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/WEBSITE_CI_PROOF.json",
@@ -3624,8 +3634,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "224ec7cd03d7c55a949cddc7a5a3d7d4f417b4f954e1ed7b6649f2b7eada2e18",
-      "bytes": 921250
+      "sha256": "dd20ab21df2b5b9bc86a739987526ba983ae88bd4d9bd37efd1bd5d2b2280807",
+      "bytes": 924112
     },
     {
       "path": "plans/user-stories.csv",

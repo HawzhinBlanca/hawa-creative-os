@@ -1,4 +1,5 @@
 import type { ShapeElement, StudioLayoutV2 } from './layout-v2.js';
+import { getSafeZoneBox } from './house-rules.js';
 
 /**
  * Above this, a strokeWidth the model wrote is read as pixels rather than as a share of the canvas
@@ -155,22 +156,27 @@ export function normalizeStudioLayout(
   } else {
     lyt.grid.margin = Math.max(minSafeMargin, lyt.grid.margin || minSafeMargin);
   }
+  const safe = getSafeZoneBox(width, height, lyt.grid.margin);
+  const left = Math.max(lyt.grid.margin, safe.x);
+  const top = Math.max(lyt.grid.margin, safe.y);
+  const right = Math.min(width - lyt.grid.margin, safe.x + safe.width);
+  const bottom = Math.min(height - lyt.grid.margin, safe.y + safe.height);
 
   if (!lyt.logo) {
     const logoMinPx = Math.max(100, Math.round(width * 0.08));
     lyt.logo = {
       x: Math.round(width / 2 - logoMinPx / 2),
-      y: lyt.grid.margin,
+      y: top,
       width: logoMinPx,
       height: Math.round(logoMinPx / logoAspect),
     };
   } else {
     lyt.logo.width = Math.max(100, lyt.logo.width || 100);
     lyt.logo.height = Math.round(lyt.logo.width / logoAspect);
-    const maxLogoX = width - lyt.grid.margin - lyt.logo.width;
-    const maxLogoY = height - lyt.grid.margin - lyt.logo.height;
-    lyt.logo.x = Math.max(lyt.grid.margin, Math.min(lyt.logo.x ?? lyt.grid.margin, maxLogoX));
-    lyt.logo.y = Math.max(lyt.grid.margin, Math.min(lyt.logo.y ?? lyt.grid.margin, maxLogoY));
+    const maxLogoX = right - lyt.logo.width;
+    const maxLogoY = bottom - lyt.logo.height;
+    if (maxLogoX >= left) lyt.logo.x = Math.max(left, Math.min(lyt.logo.x ?? left, maxLogoX));
+    if (maxLogoY >= top) lyt.logo.y = Math.max(top, Math.min(lyt.logo.y ?? top, maxLogoY));
   }
 
   if (lyt.art) {
@@ -188,13 +194,13 @@ export function normalizeStudioLayout(
     else if (t.role === 'footer') t.fontSize = Math.max(t.fontSize || 0, 12);
     else t.fontSize = Math.max(t.fontSize || 0, 12);
 
-    const maxTextX = width - lyt.grid.margin - t.width;
-    const maxTextY = height - lyt.grid.margin - t.height;
-    if (maxTextX >= lyt.grid.margin) {
-      t.x = Math.max(lyt.grid.margin, Math.min(t.x ?? lyt.grid.margin, maxTextX));
+    const maxTextX = right - t.width;
+    const maxTextY = bottom - t.height;
+    if (maxTextX >= left) {
+      t.x = Math.max(left, Math.min(t.x ?? left, maxTextX));
     }
-    if (maxTextY >= lyt.grid.margin) {
-      t.y = Math.max(lyt.grid.margin, Math.min(t.y ?? lyt.grid.margin, maxTextY));
+    if (maxTextY >= top) {
+      t.y = Math.max(top, Math.min(t.y ?? top, maxTextY));
     }
   }
 

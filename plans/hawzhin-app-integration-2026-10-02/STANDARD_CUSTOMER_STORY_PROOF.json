@@ -1,0 +1,137 @@
+{
+  "date": "2026-10-03",
+  "status": "SOURCE_REPAIRED_FOCUSED_PASS_RELEASE_SEAL_AND_NATIVE_REPEAT_PENDING",
+  "adr": "ADR292",
+  "baseEngineCommit": "8bf2f8b8",
+  "websiteProofCommit": "1263be2",
+  "nativeFailureProof": "website docs/REAL_PROVIDER_CUSTOMER_PROOF.json",
+  "observedNativeFailure": {
+    "calls": 8,
+    "costAtPinnedRates": 0.0956035,
+    "outcome": "DESIGN_FAILED/STUDIO_FAILED",
+    "reason": "all three standard layouts and their repairs violated story safe bounds",
+    "editableSources": 0,
+    "previews": 0
+  },
+  "repairs": [
+    "same existing story safe rectangle in prompt, normalization and validation",
+    "explicit website content role and all/count/automatic policy in briefing",
+    "typed photo directive in standard layout stage",
+    "website automatic use can choose one or several; explicit all/count still binds"
+  ],
+  "hardQaWeakened": false,
+  "sourceCopyChanged": false,
+  "clientScopeChanged": false,
+  "v3ProfileAdmissionBypassed": false,
+  "humanApprovalFabricated": false,
+  "redRegressions": {
+    "initial": {
+      "failed": 4,
+      "passed": 1
+    },
+    "briefInitial": {
+      "failed": 2,
+      "passed": 6
+    },
+    "auto": {
+      "failed": 1
+    }
+  },
+  "focused": {
+    "files": 7,
+    "passed": 182,
+    "failed": 0
+  },
+  "strictTestRoots": 759,
+  "lint": "PASS; any957<=1053, no new egress exceptions",
+  "initialFullSuite": {
+    "passed": 8296,
+    "failed": 1,
+    "skipped": 67,
+    "soleFailure": "r11-release-gate manifest verification against dirty/unsealed source"
+  },
+  "sourceHashes": [
+    {
+      "path": "adrs/292_standard_customer_story_constraints.md",
+      "sha256": "878871cd6d418224a261ff87ac7c6aa6dcff2a9f18ecc93d86971d3acbda13a9"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/prompts.ts",
+      "sha256": "c1cd2a1cb09d824cf74eb73b584c1cf37a4b41ba7b82e9c910fac041717b3d47"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/brief.stage.ts",
+      "sha256": "bc68fb5d98d606ebbfad291a39fa1320c7b1849511e76db7c891b22a887ec60d"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/stages/layouts.stage.ts",
+      "sha256": "d731b95e88388bf397c59685583afd698c677e0188ab2501d8d421c71e867fc8"
+    },
+    {
+      "path": "apps/core/test/brief-reference.test.ts",
+      "sha256": "80d549c58b316d5c7802bba74a45592c7b4210af159bdb78fa168caa900f5237"
+    },
+    {
+      "path": "apps/core/test/standard-story-photo-policy.test.ts",
+      "sha256": "77731355c566e53706dabc698c569e0f1434826e1a15bf2576613a0c71effac0"
+    },
+    {
+      "path": "packages/creative/src/studio/photo-selection.ts",
+      "sha256": "52e95c32563e2bf942f2e11897bc1b25dd686487983579557cb950f4308afc7f"
+    },
+    {
+      "path": "packages/creative/src/studio/studio-normalize.ts",
+      "sha256": "7608e2dc9274fc267e1df281785950a953f6932c54149fbf7f640e16310b19d3"
+    },
+    {
+      "path": "packages/creative/test/studio-story-safe-zone.test.ts",
+      "sha256": "38275e35f917665eaa73a6ab91f72999780325a353ed110d562d48e8085218fe"
+    }
+  ],
+  "logs": [
+    {
+      "path": "output/qualification/2026-10-03/standard-story/auto-red.log",
+      "sha256": "7a39873fcbdde6b9ac38745e45a09847d1cf5d521df1501286bd05449d62c7c0"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/brief-red.log",
+      "sha256": "ff7a16956d34ab76dd647ac2eb7645408f96c147985de47638be7e4284a8fc51"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/final-focused.log",
+      "sha256": "725033eae2f7b2d31f2f9066b40e5adcb63a11293308a0946bf4039951423b06"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/focused.log",
+      "sha256": "4ae2de6224deaa94907d0366149714b144591614258a05ffd479634e9e2e8ab7"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/full.log",
+      "sha256": "f12e4fd90f4401e0d70b1a421c8164700a49711705330a2e9de5e99442705034"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/lint.log",
+      "sha256": "4a4b0dee3ffcc865f8e0789267277548ad4bca2e6460a15ef04033fe98dd2dc3"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/rebuilt-focused.log",
+      "sha256": "f0f63313ab1547e90b59367c87992fc53b8458c44815d12f73b17722c88942fe"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/red.log",
+      "sha256": "c0516f598061efb3491f53453c490f5502cd8e3048eb292f8f50957b723f11e1"
+    },
+    {
+      "path": "output/qualification/2026-10-03/standard-story/types.log",
+      "sha256": "5cf7e100bdb885fded9978a727507de1723b72adc0852c877c7eedb49c3d70d1"
+    }
+  ],
+  "remaining": [
+    "clean seal and exact release verification/full regression",
+    "repeat actual real-model six-photo flow",
+    "merge/review Claude release-3 before deployment",
+    "qualified general-client v3 profiles",
+    "native Canva/languages/fonts/edit-save-reexport/human quality",
+    "hosted launch/other tools/coverage/CI/recovery/cutover"
+  ]
+}

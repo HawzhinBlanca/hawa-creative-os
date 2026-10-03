@@ -1,5 +1,5 @@
 import type { StageContext, CreativeBrief } from '../types.js';
-import { nearestGroundColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC, layoutConditioningImage, imagePixelSize, PHOTO_SHOTS, QUIET_AREAS, hexToLuminance, toneGroundHex, tonePreferenceFromWords } from '@hawa/creative';
+import { nearestGroundColour, STYLE_SPEC_SCHEMA, NEUTRAL_STYLE_SPEC, layoutConditioningImage, imagePixelSize, PHOTO_SHOTS, QUIET_AREAS, hexToLuminance, toneGroundHex, tonePreferenceFromWords, customerPhotoSelection, photoSelectionPrompt } from '@hawa/creative';
 
 /**
  * ADR-170: subject tags the brief may give, the ones the office's photo exemplars are tagged with,
@@ -208,9 +208,16 @@ export async function runBriefStage(ctx: StageContext, opts?: { lateReference?: 
     ? `\n\nThe office's standing rules for this client are in the system prompt. Where a rule names a value styleSpec has (typeface, title colour, logo corner, alignment, texture, dividers, panels, call to action), fill it from the rule unless this request's instructions or its reference say otherwise, and list each rule you applied in 'must'.`
     : '';
   const sent = await Promise.all(images.map((m) => briefImage(m[1], m[2])));
+  const webSelection = ctx.webPhotoPolicy ? customerPhotoSelection(ctx.webPhotoPolicy,ctx.instructions,ctx.webPhotoPolicy.photoCount) : undefined;
+  const webCoverage = webSelection?.mode === 'all'
+    ? `The requester requires all ${ctx.webPhotoPolicy!.photoCount} supplied content photos, each placed once.`
+    : photoSelectionPrompt(webSelection,ctx.webPhotoPolicy?.photoCount ?? 0);
+  const webPhotosPrompt = ctx.webPhotoPolicy
+    ? `\n\nAdmitted website source photos: these ${ctx.webPhotoPolicy.photoCount} uploads are content available for composition. Their role is server-verified. Describe each accurately; do not reclassify them as style references, brand logos or unrelated attachments. ${webCoverage} Carry this requester policy into must and concept planning. Image generation is separate from using these supplied content photos.`
+    : '';
   const response = await ctx.client.completeJson<CreativeBrief>({
     system: systemPrompt,
-    prompt: `${userPrompt}\n\n${imagePrompt}${rulesPrompt}`,
+    prompt: `${userPrompt}\n\n${imagePrompt}${rulesPrompt}${webPhotosPrompt}`,
     ...(sent.length ? { images: sent } : {}),
     schema: CREATIVE_BRIEF_SCHEMA,
     schemaName: 'CreativeBrief',

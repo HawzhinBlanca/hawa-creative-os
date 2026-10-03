@@ -37,6 +37,19 @@ describe('the brief reads an attached image', () => {
 });
 
 describe('the brief says what each of several images is', () => {
+  it.each([
+    {usage:{mode:'all'},expected:'The requester requires all 6 supplied content photos'},
+    {usage:{mode:'count',count:3},expected:'The requester requires exactly 3 photos'},
+    {usage:{mode:'auto'},expected:'The client lets you choose among the photographs'},
+  ])('carries the admitted website photo policy into the actual brief call: $usage.mode', async ({usage,expected}) => {
+    const completeJson=vi.fn(async()=>reply({referenceRole:'none',imageRoles:Array.from({length:6},(_,index)=>({index,role:'content_photo',notes:'source'}))}));
+    const context={...ctx(undefined,completeJson),instructions:'Compose for this content.',
+      requestImages:Array.from({length:6},()=> 'data:image/jpeg;base64,/9j/AAAA'),webPhotoPolicy:{photoCount:6,usage}};
+    await runBriefStage(context);
+    const sent=(completeJson.mock.calls[0] as unknown as [{prompt:string}])[0];
+    expect(sent.prompt).toContain('Admitted website source photos');
+    expect(sent.prompt).toContain(expected);
+  });
   it('sends all of them in arrival order and keeps one role per image', async () => {
     const completeJson = vi.fn(async () =>
       reply({

@@ -385,7 +385,7 @@ export async function runLayoutsStage(
       arabicFont: ctx.arabicFont,
       admittedDisplayFonts: ctx.referencePack.admittedDisplayFonts,
       copyBlocks: copyBlocksFormatted,
-    });
+    }) + '\n\n' + photosBrief(ctx.photos,ctx.width,ctx.height,ctx.photoCutouts,ctx.photoSelection);
 
     // One semantic substep per concept; its repair is the substep's second attempt (ADR-122).
     const substep = studioSubstepKey('layout', `concept-${ordinal + 1}`);
