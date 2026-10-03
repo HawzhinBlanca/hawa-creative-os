@@ -23,6 +23,7 @@ import { namedOfficeReviewMode } from './google-oidc.js';
 import { lockNamedReviewAuthority } from './named-review-authority.js';
 import { initialManualOrigin } from './lifecycle-native-scope.js';
 import { anchoredDecisionFor, lockBriefAnchor } from './lifecycle-brief-anchor.js';
+import { isDeskChannel } from './office-desk-channel.js';
 import { earlyHoldsFor } from './early-requester-hold.js';
 import { pauseRequesterDesign } from './requester-hold.js';
 import { officeChatsFor } from './office-chats.js';
@@ -249,7 +250,9 @@ async function manualOpenAlert(trx: Kysely<Database>, tenantId: string,
 }
 
 export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLifecycleProjection,
-  sourceStore: BlobStore | null = blobStoreFor(db)): Promise<OpenLifecycleResult> {
+  sourceStore: BlobStore | null = blobStoreFor(db),
+  /** ADR-287: Core's own Desk intake, in the transaction that admitted the office member's request. */
+  office?: { userId: string; dnaVersion: number; body: Record<string, unknown> }): Promise<OpenLifecycleResult> {
   const { requestId, tenantId, draft, key } = input;
   const hash = createHash('sha256').update(canonical({ ...input, draft: { ...draft, tenantId } })).digest('hex');
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
@@ -277,6 +280,10 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
       }
       return receipt.result as unknown as OpenLifecycleResult;
     }
+    // ADR-287: a Desk request's first projection is Core's own, made when the office member saved it; a
+    // worker only ever replays it (the receipt above). A Desk brief without that receipt is nobody's.
+    if (draft.platform === 'hawa_desk' && !office)
+      throw new LifecycleProjectionConflict('UNAUTHORIZED_ACTOR', 'A Desk request is opened by Core\'s Desk intake only');
     const otherKey = await trx.selectFrom('lifecycle_projections').select(['request_id'])
       .where('tenant_id', '=', tenantId).where('idempotency_key', '=', key).executeTakeFirst();
     if (otherKey) throw new LifecycleProjectionConflict('IDEMPOTENCY_CONFLICT', 'Projection key belongs to another request');
@@ -339,7 +346,8 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
           copyEn: /[\u0600-\u06ff]/.test(draft.rawText) ? '' : draft.rawText,
           copyCkb: /[\u0600-\u06ff]/.test(draft.rawText) ? draft.rawText : '' } : {}),
         ...((admittedSource ?? anchored?.sourceUpdate) !== undefined ? { rawJson: admittedSource ?? anchored?.sourceUpdate } : {}) },
-        { outboxState: 'recorded',...(web ? {customer:{...web.owner,dnaVersion:web.dnaVersion,body:web.receipt.body}} : {}),...(anchored?.detailsRequired ? {detailsRequired:true} : {}) });
+        { outboxState: 'recorded',...(web ? {customer:{...web.owner,dnaVersion:web.dnaVersion,body:web.receipt.body}} : {}),
+          ...(office ? { office } : {}),...(anchored?.detailsRequired ? {detailsRequired:true} : {}) });
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
         throw new LifecycleProjectionConflict('TASK_ALREADY_OWNED', 'The source event already belongs to a different executor');
@@ -493,7 +501,9 @@ export async function projectLifecycleDesignOutcome(db: Kysely<Database>, input:
     const status = report.status;
     const hasDraft = outcomeHasDraft(status, report.designId);
     let question: DesignOutcomeResult['question'];
-    if (!hasDraft && status === 'DESIGN_FAILED' && report.code === 'NEEDS_CLARIFICATION' &&
+    // ADR-287: a Desk request has no chat to ask in; its open question goes to a designer like any outcome
+    // without a draft (the office member who asked reads the run's question in the Desk).
+    if (!hasDraft && status === 'DESIGN_FAILED' && report.code === 'NEEDS_CLARIFICATION' && !isDeskChannel(request.chat_id) &&
         report.runId && /^[0-9a-f-]{36}$/i.test(report.runId)) {
       const row = (await sql<{ question: string | null; options: unknown }>`SELECT
           r.stages->'directed'->'clarify'->>'question' AS question,

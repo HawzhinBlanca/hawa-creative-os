@@ -46,9 +46,18 @@ describe('manual Canva intake', () => {
     await submitManualTask(draft);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher.mock.calls[0][0]).toBe('/v1/tasks');
-    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ copyEn: draft.copy,
+    // ADR-287: "New task" opens a request on the request lifecycle.
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toMatchObject({ copyEn: draft.copy, workflow: 'office_request',
       designInstructions: draft.designInstructions, referenceAssets: draft.referenceAssets, clientId: draft.clientId });
     expect(getPendingManualDraft()).toBeNull();
+  });
+  it('shows Core\'s reason for a first refusal of a new request and keeps the draft (ADR-287)', async () => {
+    draftStore.saveActiveDraft(draft);
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ detail: 'Type the exact words for the design (English or Kurdish) before saving' }, { status: 422 }));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(submitManualTask(draft)).rejects.toThrow('Type the exact words for the design');
+    expect(getPendingManualDraft()).toBeNull();
+    expect(draftStore.getActiveDraft()).toMatchObject({ title: draft.title, copy: draft.copy });
   });
   it('reuses the exact key and body after a lost response, including after draft recovery', async () => {
     const fetcher = vi.fn().mockRejectedValueOnce(new Error('lost')).mockResolvedValueOnce(new Response('{"id":"task-1"}'));

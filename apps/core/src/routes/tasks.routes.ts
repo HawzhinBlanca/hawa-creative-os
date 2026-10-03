@@ -1,6 +1,8 @@
 import { DocumentIntakeError, prepareDocumentIntake } from '../services/client-documents.js';
 import { chaosPoint } from '@hawa/observability';
 import { ManualIntakeScopeError, prepareManualIntake } from '../services/manual-intake-scope.js';
+import { DeskRequestRefused, OFFICE_REQUEST_WORKFLOW, openDeskRequest } from '../services/office-desk-request.js';
+import { LifecycleProjectionConflict } from '../services/lifecycle-projection.js';
 import type { Context } from 'hono';
 import type { RouteContext } from './types.js';
 import { log } from '../logging.js';
@@ -222,6 +224,43 @@ export function registerTasksRoutes(ctx: RouteContext): void {
     return c.json({ items: paginated, total, limit, offset, nextCursor: null });
   });
 
+  /**
+   * A Desk "New task" (ADR-287): opened on RequestLifecycle by services/office-desk-request.ts. The
+   * answer is the request's task, as the manual intake answered its own: 201 when it was opened now,
+   * 200 for the same request saved again under the same key.
+   */
+  async function createDeskRequest(c: any, auth: ReturnType<typeof verifyRequestAuth>, body: Record<string, unknown>) {
+    if (body.sourceDocument !== undefined) return problem(c, 422, 'Document Request Invalid', 'Use the reviewed PDF request form for a PDF request.');
+    if (!db) return problem(c, 503, 'Database Unavailable', 'A Desk request needs PostgreSQL: it is opened on the request lifecycle.');
+    if (!auth.userId || auth.role === 'service' || auth.role === 'adapter')
+      return problem(c, 403, 'Office Member Required', 'A Desk request is made by a signed-in office member.');
+    const idempotencyKey = c.req.header('Idempotency-Key') || '';
+    try {
+      const opened = await openDeskRequest(db, blobStore, { tenantId: auth.tenantId || defaultTenantId, userId: auth.userId,
+        role: auth.role || 'operator' }, idempotencyKey, body);
+      const t = opened.task;
+      const iso = (value: unknown) => value instanceof Date ? value.toISOString() : String(value ?? new Date().toISOString());
+      const task = {
+        id: t.id, tenantId: t.tenant_id, clientId: t.client_id, projectId: t.project_id, requestId: opened.requestId,
+        status: toApiTaskStatus(t.state), state: t.state, priority: t.priority, title: t.title, description: t.description,
+        headlineEn: (typeof body.headlineEn === 'string' && body.headlineEn) || t.title, headlineCkb: body.headlineCkb || null,
+        copyEn: typeof body.copyEn === 'string' ? body.copyEn : '', copyCkb: typeof body.copyCkb === 'string' ? body.copyCkb : '',
+        sourcePlatform: 'hawa_desk', sourceEventId: t.id, sourceChannelId: 'hawa_desk', idempotencyKey,
+        clientScopeLocked: true, clientDnaVersion: opened.clientDnaVersion, version: Number(t.version),
+        createdAt: iso(t.created_at), updatedAt: iso(t.updated_at),
+      };
+      if (opened.created) broadcast('task:created', task);
+      return c.json(task, opened.created ? 201 : 200);
+    } catch (err: any) {
+      if (err instanceof DeskRequestRefused) return problem(c, err.status, 'Desk Request Refused', err.message);
+      if (err instanceof ManualIntakeScopeError) return problem(c, 403, 'Client Scope Unavailable', err.message);
+      if (err instanceof IdempotencyConflictError) return problem(c, 409, 'Idempotency Conflict', 'Idempotency conflict: key already used with differing payload');
+      if (err instanceof LifecycleProjectionConflict) return problem(c, 409, 'Request Not Opened', err.message);
+      log.error('[core:tasks:create] Desk request was not opened:', err);
+      return problem(c, 503, 'Durable Storage Unavailable', 'The request was not saved; retry it unchanged.');
+    }
+  }
+
   // Create Task
   registerRoute('post', '/tasks', async (c: any) => {
     const auth = verifyRequestAuth(c);
@@ -244,6 +283,9 @@ export function registerTasksRoutes(ctx: RouteContext): void {
         'Production task intake strictly requires connected PostgreSQL database storage'
       );
     }
+
+    // ADR-287: the Desk's "New task" opens a RequestLifecycle request, as a Telegram brief does.
+    if (body.workflow === OFFICE_REQUEST_WORKFLOW) return createDeskRequest(c, auth, body);
 
     const manualIntake = body.workflow === 'canva_manual';
     const documentIntake = body.sourceDocument !== undefined;

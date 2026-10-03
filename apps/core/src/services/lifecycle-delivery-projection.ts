@@ -7,6 +7,7 @@ import { LifecycleProjectionConflict } from './lifecycle-projection.js';
 import { loadPinnedDeliverables, type DeliverableStore } from './pinned-deliverables.js';
 import { workerSigningSecretOf } from './worker-credential.js';
 import { requesterSendsConfirmed } from './requester-send-evidence.js';
+import { isDeskChannel } from './office-desk-channel.js';
 
 const OFFICE_DELIVERY_ROLES = new Set(['art_director', 'creative_director', 'office_admin', 'administrator']);
 
@@ -228,8 +229,10 @@ export async function projectLifecycleDeliveryFinish(db: Kysely<Database>, input
     }
     await assertStoredDeliveryReceipts(trx, input.tenantId, input.taskId, pub, input.outcome);
     const expectedFiles = Array.isArray(pub.package_manifest?.files) ? pub.package_manifest.files.length : 0;
+    // ADR-287: nothing is sent to a Desk request's channel; the office member takes the files from the
+    // Desk, so its delivery is confirmed by the archive and Sheet receipts alone, with no file sent.
     const requesterConfirmed = input.outcome.outcome === 'delivered' && input.outcome.uncertain.length === 0 &&
-      expectedFiles > 0 && input.outcome.filesSent === expectedFiles;
+      expectedFiles > 0 && input.outcome.filesSent === (isDeskChannel(request.chat_id) ? 0 : expectedFiles);
     let stage: LifecycleDeliveryFinishResult['stage'] = 'delivering';
     let taskState: LifecycleDeliveryFinishResult['taskState'] = 'publishing';
     let errorClass: string | null = null;

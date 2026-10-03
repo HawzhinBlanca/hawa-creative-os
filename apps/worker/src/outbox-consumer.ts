@@ -389,6 +389,10 @@ export class OutboxConsumer {
     if(!this.handlers.has('customer.request.open')) this.handlers.set('customer.request.open',async cmd=>{
       await this.dispatcher.dispatchCustomer(cmd);
     });
+    // ADR-287: a Desk "New task" opened on RequestLifecycle by Core.
+    if (!this.handlers.has('office.request.open')) this.handlers.set('office.request.open', async (cmd) => {
+      await this.dispatcher.dispatchDeskOpen(cmd);
+    });
     // A Restate workflow runs once per key (workflow-dispatcher.ts), so a dispatch repeated after a
     // consumer stopped mid-command answers 409 and starts nothing twice.
     if (!this.handlers.has('task.created')) {

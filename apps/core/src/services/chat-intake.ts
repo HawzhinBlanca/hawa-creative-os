@@ -7,7 +7,8 @@ import { CHANNEL_INGRESS_USER_ID, isReservedCanaryChatId, type BlobRef, type Lif
 export interface ChatIntake {
   tenantId?: string;
   userId?: string;
-  platform: 'telegram' | 'whatsapp' | 'hawzhin_web';
+  /** hawa_desk (ADR-287): the Desk's "New task" form, opened by Core's own Desk intake only. */
+  platform: 'telegram' | 'whatsapp' | 'hawzhin_web' | 'hawa_desk';
   sourceEventId: string;
   sourceChannelId: string;
   rawText: string;
@@ -191,12 +192,19 @@ export async function persistChatIntake(
   db: Kysely<Database>,
   input: ChatIntake,
   options: { outboxState?: 'pending' | 'recorded';detailsRequired?:true;
-    customer?: {accountId:string;userId:string;dnaVersion:number;body:import('../customer/customer-requests.js').CustomerDesignRequest} } = {},
+    customer?: {accountId:string;userId:string;dnaVersion:number;body:import('../customer/customer-requests.js').CustomerDesignRequest};
+    /**
+     * ADR-287: the Desk request as the office member saved it (its copy fields, separated at entry), the
+     * brand DNA version admitted under their scope, and who they are. Required for, and only for, hawa_desk.
+     */
+    office?: {userId:string;dnaVersion:number;body:Record<string,unknown>} } = {},
 ) {
   const tenantId = input.tenantId || '00000000-0000-4000-a000-000000000001';
   // Channel messages are written by the Channel Ingress service identity, never by a person (ADR-027).
   const userId = input.userId || CHANNEL_INGRESS_USER_ID;
   if ((input.platform==='hawzhin_web') !== Boolean(options.customer)) throw new Error('A web task requires its Core-verified ownership receipt');
+  if ((input.platform==='hawa_desk') !== Boolean(options.office) || (options.office && options.outboxState !== 'recorded'))
+    throw new Error('A Desk request is opened only on RequestLifecycle, with its Core-verified Desk receipt');
   const idempotencyKey = `chat:${input.platform}:${input.sourceChannelId}:${input.sourceEventId}`;
   if (!input.sourceEventId || !input.sourceChannelId || !input.rawText.trim()) throw new Error('A stable source event, channel and original text are required');
   return withRlsContext(db, { tenantId, userId, role: 'operator' }, async trx => {
@@ -232,7 +240,8 @@ export async function persistChatIntake(
         .split(',')
         .map(s => s.trim())
         .filter(Boolean);
-      const isDirector = input.platform === 'telegram' && allowedUsers.includes(input.sourceChannelId);
+      // ADR-287: a signed-in office member's Desk request is the office's own, like a director's brief.
+      const isDirector = (input.platform === 'telegram' && allowedUsers.includes(input.sourceChannelId)) || input.platform === 'hawa_desk';
 
       if (!isDirector) {
         // Several lifecycles may project concurrently. The office-wide allowance is admitted once
@@ -260,6 +269,8 @@ export async function persistChatIntake(
     const payload = {
       ...(options.customer ? {body:options.customer.body,clientDnaVersion:options.customer.dnaVersion,
         reviewedSource:{confirmation:'request_copy_reviewed',origin:'customer_exact_copy',localesConfirmedByRequester:true}} : {}),
+      // ADR-287: the Desk's separated copy fields stay the copy's authority (saved-design-copy.ts).
+      ...(options.office ? {body:options.office.body,clientDnaVersion:options.office.dnaVersion,requestedBy:options.office.userId} : {}),
       sourcePlatform: input.platform, sourceEventId: input.sourceEventId, sourceChannelId: input.sourceChannelId,
       ...(options.outboxState === 'recorded' ? { lifecycleOwner: 'restate' } : {}),
       rawRequestText: input.rawText, headlineEn: input.headlineEn || null, headlineCkb: input.headlineCkb || null,

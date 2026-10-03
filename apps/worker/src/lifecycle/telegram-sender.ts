@@ -526,12 +526,17 @@ export async function sendWebMessage(core:CoreInternal,m:OutboundMessage):Promis
   if(receipt?.outcome!=='web_recorded' || !/^[0-9a-f-]{36}$/i.test(receipt.receiptId)) throw new Error('WEB_RECEIPT_INVALID');
   return {outcome:'web_recorded',receiptId:receipt.receiptId};
 }
+/** ADR-287: a Desk request's channel. Nothing is sent to it; see SendResult `desk_only`. */
+export const DESK_CHANNEL = /^desk:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isDeskChannel = (chatId: unknown): boolean => typeof chatId === 'string' && DESK_CHANNEL.test(chatId);
+
 export function createTelegramSender(deps: TelegramSenderDeps,webCore:CoreInternal=coreInternalFromEnv()) {
   return restate.object({
     name: 'TelegramSender',
     handlers: {
       send: async (ctx: restate.ObjectContext, m: OutboundMessage): Promise<SendResult> =>
         withInvocationLogContext(ctx, { taskId: m?.taskId, tenantId: m?.tenantId }, () =>
+          isDeskChannel(m?.chatId) ? Promise.resolve<SendResult>({ outcome: 'desk_only' }) :
           m?.chatId?.startsWith('web:') ? ctx.run('web-record',()=>sendWebMessage(webCore,m)) : handleSend({
             run: (name, action) => ctx.run(name, action),
             sleep: (ms) => ctx.sleep(ms),
