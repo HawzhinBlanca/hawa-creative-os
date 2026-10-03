@@ -258,6 +258,78 @@ export function requestSpans(text: string): Span[] {
   return spans;
 }
 
+// --- the client named as the addressee ----------------------------------------------------------------
+
+/**
+ * ADR-284 addendum ("client named as the addressee", 2026-10-03). "For KAAE, could you design a poster for our
+ * Quality Week …", "KAAE - could you design …", "KAAE: can you make …" and "a poster for KAAE for our Quality
+ * Week …" printed the client's name as copy ("For KAAE", "KAAE", "KAAE for our Quality Week …") and titled the
+ * design "KAAE: For KAAE". Who a design is for is part of the request, never its copy: the logo names the client.
+ *
+ * Only the names of the client the request was resolved to (`clientNamesFor`: its code, label and pack names),
+ * never a capitalised word, and only where they name the addressee:
+ *  - before the ask in its sentence, alone with greetings: "For KAAE,", "To KAAE,", "For the <full name>,",
+ *    "KAAE -", "KAAE:", Sorani "for KAAE," (بۆ KAAE،);
+ *  - a line or sentence of its own ("For KAAE:") just before a sentence that asks;
+ *  - right after a design asked "for" (the request ends with "for"), followed by what the design is for
+ *    ("for our …", "about …", "announcing …", ", on …") or by the end of the sentence; Sorani "<a poster> for
+ *    KAAE (make) for …" (… بۆ KAAE (دروست بکە) بۆ).
+ * A name followed by anything else stays the requester's copy: "the KAAE Open Day", "KAAE's Quality Week"
+ * (ADR-253 handles the possessive), "For KAAE members", "at the KAAE library", quoted and laid-out copy.
+ */
+const escapeName = (name: string) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+/** A Latin name may carry a Sorani suffix in Sorani text ("KAAEی"). */
+const NAME_END = "(?:ی|یە)?(?![\\p{L}\\p{N}\\p{M}'’])";
+const ADDRESS_LEAD = `(?:(?:${GREETING_WORDS}|${ADDRESS_WORDS}|dear|so|also|and|ok(?:ay)?|well)(?=[\\s,،!.:-]|$)[\\s,،!.:-]*)*`;
+const ADDRESS_SEP = '[\\s,،:;\\-–—]*';
+const EN_ADDRESS_AFTER = '(?:for|about|announcing|promoting|advertising|celebrating|regarding|on|to\\s+(?:announce|promote|advertise|celebrate))';
+
+function addresseePatterns(names: readonly string[]) {
+  const name = `(?:${names.map(escapeName).join('|')})${NAME_END}`;
+  const addressee = `(?:(?:(?:for|to)\\s+(?:the\\s+)?|بۆ\\s+)?${name})`;
+  return {
+    /** The words before an ask, in its sentence: greetings and the addressee only. */
+    lead: new RegExp(`^${ADDRESS_LEAD}${addressee}${ADDRESS_SEP}$`, 'iu'),
+    /** A sentence or line that only names the addressee. */
+    alone: new RegExp(`^${addressee}${ADDRESS_SEP}$`, 'iu'),
+    /** After a design asked "for": the name, then what the design is for (its connective and determiner), or the end. */
+    after: new RegExp(`^${name}\\s*,?\\s*(?:${EN_ADDRESS_AFTER}(?![\\p{L}])\\s*(?:(?:our|my|the|this|their|your)(?![\\p{L}])\\s*)?|(?=[\\s.!?؟]*$))`, 'iu'),
+    ckbAfter: new RegExp(`^${name}\\s*[،,]?\\s*(?:(?:بۆمان|بۆم)?\\s*${CKB_VERB}\\s*)?(?:(?:بۆ|دەربارەی|لەسەر|سەبارەت\\s+بە)(?![\\p{L}\\p{M}])\\s*|(?=[\\s.!?؟]*$))`, 'u'),
+  };
+}
+
+/**
+ * The requests with the client named as their addressee added to them (see above). The names are the resolved
+ * client's; with none, the requests as they are.
+ */
+export function withAddressee(source: string, asks: Span[], names: readonly string[]): Span[] {
+  const usable = names.filter((n) => n.trim().length >= 2);
+  if (!asks.length || !usable.length) return asks;
+  const re = addresseePatterns(usable);
+  const all = sentences(source);
+  const out: Span[] = [];
+  for (const [a0, b0] of asks) {
+    let a = a0, b = b0;
+    const index = all.findIndex(({ start, end }) => a0 >= start && a0 < end);
+    if (index >= 0) {
+      const { start, end } = all[index];
+      const before = source.slice(start, a);
+      if (before.trim() && re.lead.test(before)) a = start;
+      // A line of its own above the ask ("For KAAE:"), when the ask opens its sentence.
+      const previous = all[index - 1];
+      if (previous && a === start && re.alone.test(source.slice(previous.start, previous.end))
+        && !asks.some(([x]) => x >= previous.start && x < previous.end)) out.push([previous.start, previous.end]);
+      const request = source.slice(a0, b0);
+      const rest = source.slice(b0, end);
+      const after = /(?<![\p{L}])for\s*$/iu.test(request) ? re.after.exec(rest)
+        : /(?<![\p{L}\p{M}])بۆ\s*$/u.test(request) ? re.ckbAfter.exec(rest) : null;
+      if (after) b = b0 + after[0].length;
+    }
+    out.push([a, b]);
+  }
+  return out.sort((x, y) => x[0] - y[0]);
+}
+
 /** Whether text still asks the bot for something: never printed (the final check, ADR-232 addendum). */
 export function asksTheBot(text: string): boolean {
   return requestSpans(text).length > 0;
@@ -461,7 +533,8 @@ export function copyBesideRequest(line: string, clientNames: readonly string[] =
   const source = ws(line);
   const asks = requestSpans(source);
   if (!asks.length) return [];
-  const rules = ruleCopy(source, asks);
+  // ADR-284 addendum: "For KAAE, could you design a poster?" carries nothing to print.
+  const rules = ruleCopy(source, withAddressee(source, asks, clientNames));
   const names = new Set(clientNames.map((n) => n.toLowerCase()));
   return rules ? [rules.headline, ...rules.lines].filter((piece) => !names.has(piece.trim().toLowerCase())) : [];
 }
@@ -590,8 +663,12 @@ export async function extractRequestCopy(draft: ChatIntake, ctx: CopyExtractionC
   const source = texts.join('\n').replace(/[^\S\n]+/g, ' ').replace(/ ?\n[\s]*/g, '\n').trim();
   const flat = source.replace(/\n/g, ' ');
   // ADR-232 addendum: any block that asks the bot for a design, anywhere in it, is taken apart.
-  const asks = requestSpans(source);
-  if (!asks.length) return draft;
+  // ADR-284 addendum: the client named as the addressee ("For KAAE, …", "a poster for KAAE for our …") is part
+  // of the request, for the rules, the model's guard and the receipt alike.
+  const asked = requestSpans(source);
+  if (!asked.length) return draft;
+  const asks = withAddressee(source, asked, draft.clientId
+    ? clientNamesFor(draft.clientId, draft.clientId === KAAE_CLIENT_ID ? 'KAAE' : null) : []);
   const forbidden = forbiddenSpans(source, asks);
   const base: Omit<CopyExtractionReceipt, 'method' | 'why'> = { v: 1,
     request: asks.map(([a, b]) => source.slice(a, b).trim()).join(' … ') };

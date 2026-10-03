@@ -144,3 +144,39 @@ The natural-language stress script S156 matched the football poster's title as "
 **Not addressed.** Arabic requests ("please design a poster for …") are not read as requests at all; such a brief opens for a designer with its request line as the name. A request line whose only words beside the request are not the client's name, without a greeting above it ("I need a poster for the launch, keep it formal"), keeps its old reading.
 
 **Verification.** 16 new route tests in `canary-friction-2026-10-03.test.ts` (14 failed before the fix; the two controls, a greeting above a request that carries the name and "Hello Summer!", passed); four rows of the F3 title table now expect the better names.
+
+## Addendum: the client named as the addressee (2026-10-03)
+
+**Date:** 2026-10-03. **Status:** implemented on branch `claude/clientprefix` (from `claude/release-3` b7541da6); not deployed.
+**Changes a foundation:** no. No migration, no new dependency, no paid call, no new requester wording.
+
+**Before.** Naming who the design is for at the start of the request printed the client's name as copy and spoiled the title. Reproduced at route level (`/v1/internal/telegram/intake`, the office owner's chat):
+
+| Brief | Before (title; copy) | After (title; copy) |
+|---|---|---|
+| For KAAE, could you design a poster for our Quality Week on 12 November at the Rotana Hotel? | KAAE: For KAAE; "For KAAE", "Quality Week on 12 November at the Rotana Hotel" | KAAE: Quality Week; "Quality Week on 12 November at the Rotana Hotel" |
+| For KAAE: please make a poster announcing the Assessment Literacy Workshop on 5 November. | KAAE: For KAAE; "For KAAE", "Assessment Literacy Workshop on 5 November" | KAAE: Assessment Literacy Workshop; "Assessment Literacy Workshop on 5 November" |
+| KAAE - could you design an Instagram post for our Open Day on 20 October? | KAAE; "KAAE", "Open Day on 20 October" | KAAE: Open Day; "Open Day on 20 October" |
+| Could you design a poster for KAAE for our Quality Week on 12 November? | KAAE for Our Quality Week; "KAAE for our Quality Week on 12 November" | KAAE: Quality Week; "Quality Week on 12 November" |
+| To KAAE, we need a flyer about the Accreditation Info Session on 6 November 2026 at 11 am. | KAAE: To KAAE; "To KAAE", … | KAAE: Accreditation Info Session; the session line only |
+| KAAE: can you make a banner for the Teacher Appreciation Day? It's on 20 October 2026 … | KAAE; "KAAE", … | KAAE: Teacher Appreciation Day; the name and the date line |
+| Hi team, for KAAE, could you design a poster for our Book Fair on 5 November? | KAAE: For KAAE; "For KAAE", … | KAAE: Book Fair; "Book Fair on 5 November" |
+| For the Kurdistan Accrediting Association for Education, could you design … Quality Week … | KAAE: Kurdistan Accrediting Association for Education | KAAE: Quality Week |
+| Could you make a poster for KAAE announcing the Science Fair on 14 November 2026 at 9:00 AM? | KAAE Announcing the Science Fair | KAAE: Science Fair |
+| We'd like an Instagram story for KAAE, about the Open Day on 20 October 2026 at the campus. | KAAE, About the Open Day | KAAE: Open Day |
+| "For KAAE:" on a line of its own above the request | KAAE: For KAAE | KAAE: Quality Week |
+| Sorani "for KAAE, please make a poster for <event> …" | KAAE; "KAAE" as headline | KAAE: <event>; the event and its date line |
+| Sorani "please make a poster for KAAE for <event> …" | "KAAE for <event>" as headline and title | KAAE: <event> |
+| Sorani "please make a poster for KAAE, make it, for <event> …" | "KAAE make it for <event>" as headline and title (the verb was printed too) | KAAE: <event> |
+
+Each result is the same copy and title as the same brief without the client reference, opened for KAAE through the client question.
+
+**Decision** (`request-copy-extraction.ts`, `withAddressee`). Who a design is for is part of the request, never its copy: the logo names the client. In `extractRequestCopy` the request spans are extended over the client named as the addressee before the rules, the guard's forbidden spans and the receipt's request words are computed, so a model reading cannot print it either. `copyBesideRequest` (the greeting-line rule in `chat-campaign-intake.ts`) uses the same spans.
+- **Which names.** Only the names of the client the request was resolved to (`clientNamesFor`: the pack's code, label, display and full names, aliases; routing nouns such as "university" excluded), as intake resolved it today. No capitalised-word heuristic; the client resolution is unchanged.
+- **Where.** (1) Before the ask in its sentence, with only greetings or lead-ins beside it: "For KAAE,", "For KAAE:", "To KAAE,", "For the <full name>,", "KAAE -", "KAAE:", Sorani "for KAAE," (بۆ KAAE،). (2) A line or sentence that only names the addressee, directly above a sentence that opens with an ask. (3) Right after a design asked "for": the name followed by what the design is for ("for our …", "about …", "announcing …", "on …", optionally after a comma) or by the end of the sentence; Sorani "<a poster> for KAAE (make) for …".
+- **What stays.** A name followed by anything else is the requester's copy: "the KAAE Open Day", "KAAE Open Day", "For KAAE members", "at the KAAE library", "KAAE's …" (ADR-253 as before), quoted words ("KAAE welcomes you") and laid-out lines.
+- **Nothing else to print.** "Could you design a poster for KAAE?" carries no copy; it opens for a designer as a request without copy does (ADR-232 rule 6), never printing "KAAE".
+
+**Not addressed.** A client known only in `hawa.clients` (no client pack) has no names here, so its addressee is still copy. A request that names another client than the one the chat is bound to keeps that name. Sorani "for the KAAE association" (with a Sorani noun before the name) and Arabic requests are not covered. The Sorani phrases in the tests need a native speaker's review.
+
+**Verification.** `apps/core/test/client-named-as-addressee.test.ts`, 23 tests: the 14 briefs above at route level, each compared with the same brief without the client; the four live briefs exactly; a model reading whose lines name the addressee (refused by the guard) and whose headline is the addressee (falls back to the rules); and 7 must-stay controls. 16 failed before the fix (the 7 controls passed before and after). The 49 intake, requester, client-question, lifecycle-source, routing, chat, turn, canary, copy, title and NLU test files: 1184 passed, 1 skipped. NLU evaluation unchanged: 349/356, original 300/302, held out 49/54, costly errors 0. `pnpm typecheck` and `pnpm lint` pass.
