@@ -1397,7 +1397,7 @@ paths:
     get:
       tags: [Operations]
       operationId: listCallCostEvidence
-      description: Office administrator, operator or auditor reads sanitized Studio, evaluation and voice call costs. At most 50 newest records per page; opaque keyset cursor retains timestamp precision. No provider call or raw answer is exposed.
+      description: Office administrator, operator or auditor reads sanitized Studio, evaluation, voice, Canva planner, health probe and intake router (ADR-289) call costs. At most 50 newest records per page; opaque keyset cursor retains timestamp precision. No provider call or raw answer is exposed.
       parameters:
         - {name: cursor, in: query, schema: {type: string, maxLength: 500}}
       responses:
@@ -1409,17 +1409,29 @@ paths:
       tags: [Operations]
       operationId: readCallCostEvidence
       parameters:
-        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice, health_probe, canva_planner]}}
+        - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice, health_probe, canva_planner, intake_router]}}
         - {name: callId, in: path, required: true, schema: {type: string, format: uuid}}
       responses:
         '200': {description: Exact snapshotHash, original cost and outcome, reserved USD, conservative accounted USD, attributed revision history, conflicts and current canRecord authority}
         '404': {description: Call absent from this office}
         default: {$ref: '#/components/responses/Problem'}
+  /v1/spending/summary:
+    get:
+      tags: [Operations]
+      operationId: readSpendingSummary
+      description: ADR-289. Office administrator or operator (by membership) reads every paid model call of the last N office days (Asia/Baghdad, today included) totalled by day and budget role, intake router readings included. Each call counts its accountedCostUsd from the call list; awaitingEvidence counts calls whose unused reservation is still held. Reads only.
+      parameters:
+        - {name: days, in: query, schema: {type: integer, minimum: 1, maximum: 92, default: 14}}
+      responses:
+        '200': {description: 'timezone, from, to, days[] (day, calls, accountedUsd, roles[]), roles[] (role, calls, accountedUsd, awaitingEvidence), calls, accountedUsd'}
+        '400': {description: Days outside 1 to 92}
+        '403': {description: Administrator or operator membership required; an auditor cannot read the evaluation ledger}
+        default: {$ref: '#/components/responses/Problem'}
   /v1/spending/calls/{kind}/{callId}/evidence:
     post:
       tags: [Operations]
       operationId: recordCallCostEvidence
-      description: Appends a named administrator cost attestation for one exact call. Snapshot and authority are checked again in SQL. The highest original, settled or attested charge remains counted. Terminal evidence releases unused reserves; this changes no outcome, score, workflow state or execution hold and dispatches no provider request. Corrections append revisions. Same-action retries return the saved receipt.
+      description: Appends a named administrator cost attestation for one exact call. Intake router readings take none (409 CALL_COST_NOT_ATTESTABLE, ADR-289). Snapshot and authority are checked again in SQL. The highest original, settled or attested charge remains counted. Terminal evidence releases unused reserves; this changes no outcome, score, workflow state or execution hold and dispatches no provider request. Corrections append revisions. Same-action retries return the saved receipt.
       parameters:
         - {name: kind, in: path, required: true, schema: {enum: [studio, evaluation, voice, health_probe, canva_planner]}}
         - {name: callId, in: path, required: true, schema: {type: string, format: uuid}}
