@@ -413,17 +413,25 @@ describe('the decision is made once', () => {
       .toMatchObject({ intakeStatus: 409, code: 'IDEMPOTENCY_CONFLICT' });
   });
 
-  it('the intake router is asked once per update, and its pick starts a round only when it is sure', async () => {
+  it('the intake router is asked once per update, and its pick never starts a round by itself (ADR-286)', async () => {
     const chat = chatId();
     const kaae = await seed(chat, 'manual', 3, { title: 'KAAE members evening' });
     await seed(chat, 'manual', 3, { title: 'Graduation flyer' });
     const read = vi.fn<RequesterIntentModel['read']>(async (input) => ({ intent: 'change', reason: 'fixture', source: 'model',
-      requestId: input.requests.find((r) => r.title.startsWith('KAAE'))!.requestId, confidence: 0.9 }));
+      requestId: input.requests.find((r) => r.title.startsWith('KAAE'))!.requestId, confidence: 0.97 }));
     const words = message(chat, 'KAAE members evening, 5 October');
-    const answer = await intake(app({ requesterIntentModel: { read } }), words);
+    // A sure pick names the design the requester is asked about; it starts nothing.
+    const asked = await intake(app({ requesterIntentModel: { read } }), words);
     expect(read).toHaveBeenCalledTimes(1);
-    expect(answer).toMatchObject({ lifecycleAction: 'requester-revision', requestId: kaae.requestId, directive: 'KAAE members evening, 5 October' });
-    expect(await intake(app({ requesterIntentModel: { read } }), words)).toMatchObject({ duplicate: true, newTaskId: answer.newTaskId });
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true,
+      chatAnswer: { text: 'Is this a change to <b>KAAE members evening</b>, or a new design?' } });
+    expect(await tasksInChat(chat)).toHaveLength(2);
+    expect(await intake(app({ requesterIntentModel: { read } }), words)).toMatchObject({ duplicate: true, choiceRequired: true });
+    expect(read).toHaveBeenCalledTimes(1);
+    // The requester's own answer starts the round.
+    const revised = await intake(app({ requesterIntentModel: { read } }), message(chat, 'change'));
+    expect(revised).toMatchObject({ lifecycleAction: 'requester-revision', requestId: kaae.requestId, directive: 'KAAE members evening, 5 October' });
+    expect(await tasksInChat(chat)).toHaveLength(3);
     expect(read).toHaveBeenCalledTimes(1);
 
     const unsure = vi.fn<RequesterIntentModel['read']>(async (input) => ({ intent: 'change', reason: 'fixture', source: 'model',
@@ -433,6 +441,30 @@ describe('the decision is made once', () => {
     await seed(other, 'manual', 3, { title: 'KAAE workshop' });
     expect(await intake(app({ requesterIntentModel: { read: unsure } }), message(other, 'KAAE members evening, 5 October')))
       .toMatchObject({ choiceRequired: true });
+  });
+
+  it('a redo the router is sure of is asked about, never redone on its word (ADR-286, NLU eval en-unclear-05)', async () => {
+    const chat = chatId();
+    await seed(chat, 'delivered', 2, { title: 'Quality Assurance Workshop' });
+    const read = vi.fn<RequesterIntentModel['read']>(async (input) => ({ intent: 'change', reason: 'fixture', source: 'model',
+      requestId: input.requests[0].requestId, confidence: 0.94 }));
+    const before = (await tasksInChat(chat)).length;
+    const asked = await intake(app({ requesterIntentModel: { read } }), message(chat, 'do a better design for the conference'));
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true });
+    expect(asked.lifecycleAction).not.toBe('requester-revision');
+    expect(await tasksInChat(chat)).toHaveLength(before);
+  });
+
+  it('a fragment the router reads as a change is asked about, not kept as a change (ADR-286, NLU eval en-unclear-03)', async () => {
+    const chat = chatId();
+    await seed(chat, 'in_review', 2, { title: 'KAAE: Quality Assurance Workshop' });
+    const read = vi.fn<RequesterIntentModel['read']>(async (input) => ({ intent: 'change', reason: 'fixture', source: 'model',
+      requestId: input.requests[0].requestId, confidence: 0.87 }));
+    const asked = await intake(app({ requesterIntentModel: { read } }), message(chat, 'for the deans'));
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true,
+      chatAnswer: { text: 'Is this a change to <b>Quality Assurance Workshop</b>, or a new design?' } });
   });
 });
 
@@ -478,6 +510,34 @@ describe('the intake router\'s paid call (migration 068)', () => {
     // A replay of the same update: the stored decision, no second call.
     expect(await model.read(input)).toMatchObject({ intent: 'change', requestId });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('ADR-286: whatever the router\'s confidence, its reading alone plans a question, never a paid round or a kept change', async () => {
+    const id = await client();
+    const waiting = view(randomUUID(), id);
+    const planWith = async (text: string, requests: ChatRequestView[], decision: Record<string, unknown>) => {
+      const model = createRequesterIntentModel(db, { fetcher: (async () => completion(decision)) as any, apiKey: key });
+      const reading = await model.read({ tenantId, updateId: updateId(), chatId: String(chatId()), text, requests, lang: 'en' });
+      expect(reading).toMatchObject({ source: 'model', intent: 'change' });
+      const rules = readIntentByRules(text);
+      return planTurn({ text, reading: { ...reading!, ...(rules.redo ? { redo: rules.redo } : {}) }, requests, bound: [], unboundReply: false,
+        senderId: '1', officeIds: [], group: false, addressed: true, pendingAsk: null, now: Date.now() });
+    };
+    // A design waiting for the requester's changes, named by a sure router: asked, not revised.
+    expect(await planWith('KAAE members evening, 5 October', [waiting], { kind: 'change', design: 1, confidence: 0.99 }))
+      .toMatchObject({ kind: 'ask', intent: 'unclear', allowNew: true, options: [{ requestId: waiting.requestId }] });
+    // A delivered design and redo-or-new words: "redo it, or a new design?", never a redo round.
+    const delivered = { ...view(randomUUID(), id), stage: 'delivered' as const, sentToChat: true };
+    expect(await planWith('do a better design for the conference', [delivered], { kind: 'change', design: 1, confidence: 0.94 }))
+      .toMatchObject({ kind: 'ask', intent: 'unclear', redo: 'or-new', options: [{ requestId: delivered.requestId }] });
+    // A design in review: a fragment is not kept as a change on the router's word.
+    const review = { ...view(randomUUID(), id), stage: 'in_review' as const, rev: 2 };
+    expect(await planWith('for the deans', [review], { kind: 'change', design: 1, confidence: 0.87 }))
+      .toMatchObject({ kind: 'ask', intent: 'unclear', allowNew: true });
+    // The rules' own change is planned as before.
+    expect(planTurn({ text: 'make the title gold', reading: readIntentByRules('make the title gold'), requests: [waiting], bound: [],
+      unboundReply: false, senderId: '1', officeIds: [], group: false, addressed: true, pendingAsk: null, now: Date.now() }))
+      .toMatchObject({ kind: 'revise', requestId: waiting.requestId });
   });
 
   it('an answer it cannot read, or an unsure one, is no decision (the requester is asked)', async () => {

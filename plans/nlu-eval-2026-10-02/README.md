@@ -191,7 +191,7 @@ These hard guards must stay rules, outside the model, whatever it reads:
    - Cancel words never offer "a new design".
    - Undo words are never applied to another open design.
 2. **Approval needs the office role.** A requester's approval words only tell the office (ADR-022). Refusals ("not approved", "don't send it") are checked before approval words. A delivery request ("send it again") is never approval.
-3. **A paid round needs certainty.** A round starts only for a design that waits for the requester's changes, known by a reply, as the only candidate, by its name, or by a model reading with confidence of 0.85 or more. It never starts by recency alone. Changes to a design that is being made or is in review are kept for the office.
+3. **A paid round needs certainty.** A round starts only for a design that waits for the requester's changes, known by a reply, as the only candidate, by its name, or by the requester's answer to the bot's question. It never starts by recency alone, nor by a model reading, whatever its confidence: ADR-286 (2026-10-03) supersedes the earlier "model reading with confidence of 0.85 or more". Changes to a design that is being made or is in review are kept for the office, but not on a model's reading alone; that is asked about (ADR-286).
 4. **Copy is never invented.** A brief's exact copy comes only from the requester's own words.
 
 ## After ADR-272 (rules tuned on this set, 2026-10-02)
@@ -226,3 +226,9 @@ Still failing:
   - "fantastic, my boss is really happy with it"
 
 A model-first reader still has to beat round 3, not the tuned 99.3 %.
+
+## Model-first experiment (2026-10-03)
+
+`MODEL_FIRST_RESULTS.md` runs these cases through the production intake router, a model-first reader with the hard guards above, and a hybrid, using `scripts/experiments/nlu-model-first.ts`. None of them beats the rules on the gates above, so the recommendation is to keep the rules. The model-first reader on Sol does get 16 of 18 round-3 cases right, against 14 for the rules. The router production already has scores 344, against 349 without it, and starts a paid redo on redo-or-new words.
+
+ADR-286 (same day, owner-approved) acted on that: a model reading never starts a paid round or keeps a change by itself. The production path now scores 349, with no costly errors and no wrong paid rounds. See `MODEL_FIRST_RESULTS.md`, "After ADR-286".
