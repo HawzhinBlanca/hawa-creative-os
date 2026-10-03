@@ -68,3 +68,23 @@ describe('a laid-out brief: its closing words to the designer are not copy (chat
     expect(prepared.copy.split(/\n\s*\n/).map((p) => p.trim())).toEqual(copy);
   });
 });
+
+describe('chat around a request is not its copy (rules path)', () => {
+  it.each([
+    ['Thanks for the last one! We need a poster for the Book Fair on 9 November at Family Mall.', ['Book Fair on 9 November at Family Mall']],
+    ['Great job on the workshop poster. Now we need a flyer for the Chess Club tournament on 8 November 2026 at 3 pm.',
+      ['Chess Club tournament on 8 November 2026 at 3 pm']],
+    ['hello hope you are well, I wanted to say thanks for the last poster it was great, and now we need a new one for the science fair on 12 November at 10am in the main hall of the university, please use the same style',
+      ['Science fair on 12 November at 10am in the main hall of the university']],
+    ['hi so about the workshop poster can you make the title bigger and also we need another poster for the book fair on 9 November at the family mall',
+      ['Book fair on 9 November at the family mall']],
+    ['can you make one for the Book Fair on 9 November at Family Mall?', ['Book Fair on 9 November at Family Mall']],
+  ])('%s', async (words, expected) => {
+    expect(await printed(words)).toEqual(expected);
+  });
+
+  it('words after the request that thank the audience stay copy', async () => {
+    expect(await printed('Can you make a poster for the Book Fair on 9 November? Thank you for coming to our fair.'))
+      .toEqual(['Book Fair on 9 November', 'Thank you for coming to our fair']);
+  });
+});

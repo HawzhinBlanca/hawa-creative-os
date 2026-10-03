@@ -97,11 +97,16 @@ const LEAD_IN = /^(?:(?:hi|hello|hey|dear|team|all|everyone|guys|so|also|and|ok(
 const EN_ASK = '(?:(?:can|could|would|will)\\s+(?:you|u)\\s+(?:please\\s+|kindly\\s+|also\\s+)?(?:make|create|design|prepare|produce|do|draw|put\\s+together|whip\\s+up|get\\s+(?:us|me)|help\\s+(?:us\\s+|me\\s+)?with)' +
   '|(?:please|pls|plz|kindly)\\s+(?:make|create|design|prepare|produce|do|draw)' +
   "|(?:we|i)\\s*(?:'d|’d|\\s+would)\\s+(?:like|love)|(?:we|i)\\s+(?:need|want)|(?:we|i)\\s*(?:'re|’re|'m|’m|\\s+are|\\s+am)\\s+looking\\s+for)";
-const EN_OPENER = new RegExp(`(?<![\\p{L}\\p{N}'’])${EN_ASK}(?:\\s+(?:us|me))?\\s+(?=${words(4)}(?:${NOUN}|something|anything))`, 'giu');
+/**
+ * Hunt 3: a design asked for as "one" ("we need a new one for the science fair", "can you make one for the Book Fair",
+ * "another one for …"): the request was not found, and the whole sentence was printed as the copy.
+ */
+const ONE = "(?:(?:a\\s+)?new\\s+one|another(?:\\s+one)?(?=\\s+(?:for|about)\\b)|one(?:\\s+more)?(?=\\s+(?:for|about)\\b))";
+const EN_OPENER = new RegExp(`(?<![\\p{L}\\p{N}'’])${EN_ASK}(?:\\s+(?:us|me))?\\s+(?=${words(4)}(?:${NOUN}|something|anything)|${ONE})`, 'giu');
 /** An order at the start of a sentence: "Design a simple KAAE banner", "Make us two posters". */
 const EN_IMPERATIVE = new RegExp(`^(?:please\\s+)?(?:make|create|design|prepare|produce|draw)\\s+(?:us\\s+|me\\s+)?(?=(?:a|an|the|another|one|two|three|some|\\d+)\\s+${words(4)}${NOUN})`, 'iu');
 /** The design named after an ask, and what it is for: "a KAAE poster for our", "an Instagram story and a poster announcing the". */
-const EN_DESIGN = new RegExp(`${words(4)}(?:${NOUN}|something|anything)` +
+const EN_DESIGN = new RegExp(`(?:${ONE}|${words(4)}(?:${NOUN}|something|anything))` +
   `(?:\\s+${NOUN})*(?:\\s+(?:and|or|&)\\s+${words(3)}${NOUN}(?:\\s+${NOUN})*)*` +
   '(?:\\s+(?:please|pls|plz))?' +
   '(?:\\s*:|\\s+(?:to\\s+(?:announce|promote|advertise|celebrate|invite\\s+(?:people\\s+)?to)|announcing|promoting|advertising|celebrating|inviting\\s+(?:people\\s+)?to|for|about|on|of|regarding|that\\s+(?:says|reads|announces)))?' +
@@ -394,10 +399,37 @@ const GLUE_START = /^(?:(?:it|this|that)(?:'s|’s|\s+is|\s+will\s+be)|it'll\s+b
  * before and after a request in its sentence kept ("For our Teacher Appreciation Day, could you design
  * a poster?" keeps "Teacher Appreciation Day"), leading glue dropped.
  */
+/**
+ * Hunt 3 (2026-10-03): chat before a request ("Thanks for the last one!", "Great job on the workshop poster.", "hello
+ * hope you are well, I wanted to say thanks …, and now …") and a question to the bot inside it ("… can you make the
+ * title bigger and also …") were printed as the design's headline. Before the first request, a clause of chat is
+ * left out from the start of a piece, and a piece that asks the bot something is left out whole; words to the
+ * designer are left out from the end of any piece ("…, please use the same style").
+ */
+const CHAT_CLAUSE = new RegExp('^(?:' + [
+  '(?:hi|hello|hey|dear\\s+\\p{L}+|good\\s+(?:morning|afternoon|evening)|salam|slaw)(?:\\s+(?:there|team|all|everyone))?(?:\\s+(?:i\\s+)?hope\\s+.*)?',
+  "(?:i\\s+)?hope\\s+(?:you\\s+are|you'?re|all\\s+is|everything\\s+is)\\s+(?:well|good|fine).*", 'how\\s+are\\s+you.*',
+  "(?:i\\s+)?(?:just\\s+)?(?:wanted\\s+to\\s+)?(?:say\\s+)?(?:thanks?|thank\\s+you)(?:\\s+(?:so\\s+much|a\\s+lot|again))?(?:\\s+for\\s+.*)?",
+  '(?:great|good|nice|amazing|excellent|lovely)\\s+(?:job|work)\\b.*', 'well\\s+done\\b.*',
+  '(?:it|that|this)\\s+(?:was|looked|looks|is)\\s+(?:really\\s+|so\\s+|very\\s+)?(?:great|good|amazing|perfect|beautiful|lovely)\\b.*',
+  '(?:and\\s+|so\\s+)?(?:now|also|then|next|so|ok(?:ay)?|anyway)',
+].join('|') + ')$', 'iu');
+const ASKS_THE_BOT_INSIDE = /\b(?:can|could|would|will)\s+(?:you|u)\b/iu;
+function withoutChat(piece: string, beforeAsk: boolean): string {
+  let clauses = piece.split(/(?<=[,،;])\s*/u);
+  if (beforeAsk) {
+    while (clauses.length && CHAT_CLAUSE.test(clauses[0].replace(/[\s,،;.!?]+$/u, '').trim())) clauses = clauses.slice(1);
+    if (clauses.some((c) => ASKS_THE_BOT_INSIDE.test(c))) return '';
+  }
+  while (clauses.length > 1 && readsAsInstruction(clauses.at(-1)!.replace(/[\s,،;.!?]+$/u, ''))) clauses = clauses.slice(0, -1);
+  return clauses.join(' ').replace(/\s+/g, ' ');
+}
+
 function ruleCopy(source: string, asks: Span[]): ProposedCopy | null {
   const kept: string[] = [];
-  const clean = (piece: string, beforeAsk: boolean) => {
-    let t = piece.replace(/^[\s,،:;!.-]+|[\s,،:;.?؟!-]+$/gu, '').replace(CKB_TRAILING_VERB, '').replace(/[\s,،]+$/u, '');
+  const firstAsk = asks.length ? Math.min(...asks.map(([a]) => a)) : Infinity;
+  const clean = (piece: string, beforeAsk: boolean, beforeFirst = false) => {
+    let t = withoutChat(piece, beforeFirst).replace(/^[\s,،:;!.-]+|[\s,،:;.?؟!-]+$/gu, '').replace(CKB_TRAILING_VERB, '').replace(/[\s,،]+$/u, '');
     if (beforeAsk) t = t.replace(/^(?:(?:for|about)\s+(?:our|the|this|my|their)|بۆ)\s+/iu, '');
     t = t.replace(GLUE_START, '').replace(/^(?:(?:ئەوە|ئەمە)\s+)?(?:لە)\s+/u, '').trim();
     if (t && contentWords(t)) kept.push(t);
@@ -407,9 +439,9 @@ function ruleCopy(source: string, asks: Span[]): ProposedCopy | null {
     const inside = asks.filter(([a, b]) => a >= start && b <= end);
     // A sentence with a request in it is taken apart around the request ("Could you design … for our X?").
     if (!inside.length && (readsAsInstruction(s) || GREETING_ONLY.test(s))) continue;
-    if (!inside.length) { clean(s, false); continue; }
+    if (!inside.length) { clean(s, false, end <= firstAsk); continue; }
     let from = start;
-    for (const [a, b] of inside) { clean(source.slice(from, a), true); from = b; }
+    for (const [a, b] of inside) { clean(source.slice(from, a), true, a <= firstAsk); from = b; }
     clean(source.slice(from, end), false);
   }
   return kept.length ? { headline: kept[0], lines: kept.slice(1) } : null;
