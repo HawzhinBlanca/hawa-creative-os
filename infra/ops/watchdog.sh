@@ -204,13 +204,27 @@ fi
 #    colour; a colour it removed must stay removed.
 running_names() { docker ps --filter name=hawa-production- --filter status=running --format '{{.Names}}' 2>/dev/null || true; }
 source "$ROOT/infra/ops/stack_containers.sh"
+# A deploy holding the deploy lock (infra/ops/deploy_lock.py, ADR-240) recreates containers itself.
+# Starting the one it is replacing ran a second compose beside its `up -d`: two runs creating the same
+# container, a name conflict that stops the deploy half-way, or containers left "Created" (2026-09-18).
+# Only a deploy counts: the canary and the nightly backup hold the same lock and change no container.
+deploy_applying() {
+  local holder
+  holder="$(python3 "$ROOT/infra/ops/deploy_lock.py" --holder 2>/dev/null)" || return 1
+  [[ "$holder" == *deploy.sh* ]]
+}
 # Step 2 depends only on Docker. A Restate backup that could not be put back is reported (below) but
 # no longer stops the restart: it used to be counted before this step, and a record the office must
 # release by hand then kept every stopped container down, unreported, until it cleared.
 if [[ "$docker_up" == 1 ]]; then
   running="$(count_stack)"; workers="$(count_workers)"
   if [[ "$running" -lt "$STACK_SIZE" || "$workers" -lt 1 ]] || ! vector_running; then
-    if [[ "$MODE" != "--status" ]]; then
+    if [[ "$MODE" != "--status" ]] && deploy_applying; then
+      # Left to the deploy; what is still missing once it had time to finish is reported as usual.
+      say "a deploy holds the deploy lock: its containers are left to it this pass"
+      sleep 30
+      running="$(count_stack)"; workers="$(count_workers)"
+    elif [[ "$MODE" != "--status" ]]; then
       # The deployed release's commit (ADR-158), not whatever branch a checkout happens to be on.
       export HAWA_BUILD_COMMIT="$(git -C "$DEPLOY_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
       # Existing containers first, exactly as they were deployed. `up` then only creates what is

@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -79,6 +80,7 @@ esac
 exit 0
 `, { mode: 0o755 });
   for (const tool of ['sleep', 'open']) fs.writeFileSync(path.join(bin, tool), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
+
   const kb = opts.freeKb ?? 500 * 1048576;
   fs.writeFileSync(path.join(bin, 'df'), `#!/bin/bash
 case "$1" in
@@ -251,6 +253,37 @@ describe('the watchdog\'s alerts', () => {
     expect(notify.stdout).toMatch(/ALERT NOT SENT/);
     expect(s.run(['--announce']).code).toBe(1);
     expect(s.alerts()).toHaveLength(1);
+  });
+
+  // Hunt 3: while deploy.sh --apply recreated containers, the watchdog saw one missing and ran its own
+  // `compose start` / `up -d --no-recreate` beside the deploy's `up -d`: two compose runs creating the same
+  // container (a name conflict that ends the deploy half-way, or containers left "Created", as on
+  // 2026-09-18). While a deploy applies, containers are left to it; the pass still checks and reports.
+  it('starts no container while a deploy holds the deploy lock, and still reports what it sees', async () => {
+    const s = setup({ running: STACK.filter((c) => !c.includes('core')) });
+    const lockFile = path.join(s.home, '.hawa', 'deploy.lock');
+    // The holder's command line names the job: bash -c '…' <name>.
+    const hold = (name: string) => spawn('python3', [path.join(repo, 'infra/ops/deploy_lock.py'), '--lock', lockFile, '--',
+      'bash', '-c', 'echo held; exec /bin/sleep 30', name]);
+    // The nightly canary (or backup) holding it changes no container: the pass starts what is missing.
+    const canary = hold('infra/ops/live_canary.sh');
+    await once(canary.stdout, 'data');
+    try { s.run(); } finally { canary.kill('SIGTERM'); await once(canary, 'exit'); }
+    expect(s.calls()).toMatch(/docker compose .* start stamp=/);
+    fs.rmSync(s.f('calls'));
+    // A deploy holding it: left to the deploy.
+    const deploy = hold('infra/docker/deploy.sh');
+    await once(deploy.stdout, 'data');
+    let r: ReturnType<typeof s.run>;
+    try { r = s.run(); } finally { deploy.kill('SIGTERM'); await once(deploy, 'exit'); }
+    expect(r.code).toBe(1);
+    expect(r.stdout).toMatch(/Z a deploy holds the deploy lock: its containers are left to it this pass/);
+    expect(s.calls()).not.toMatch(/docker compose .* (start|up)/);
+    expect(s.calls()).not.toMatch(/docker start/);
+    expect(r.stdout).toMatch(/Z PROBLEM: only 5\/6 stack containers running \(down: core\)/);
+    // Once the deploy is over, the pass starts what is missing as before.
+    s.run();
+    expect(s.calls()).toMatch(/docker compose .* start stamp=/);
   });
 
   it('judges the disk by free space: 97% used with 30 GiB free is fine, 20 GiB free is reported', () => {
