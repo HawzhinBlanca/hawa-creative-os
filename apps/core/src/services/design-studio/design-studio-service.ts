@@ -2541,7 +2541,7 @@ export class DesignStudioService {
       // Not a failure: the run waits at its stage for the design it revises, and a later resume
       // makes the edit. So does a transfer Canva refused with its rate limit (nothing was created):
       // the worker waits the time named and resumes, and the import is sent again under the run's key.
-      // ADR293: a native handoff problem cannot be repaired by generating a second design.
+      // ADR300: a native handoff problem cannot be repaired by generating a second design.
       // The saved transfer source and import key stay available to the existing retry/operator path.
       if (err instanceof CanvaFlowError && (run.status === 'transferring' || err.code === 'PARENT_STILL_RUNNING' || err.code === 'CANVA_RATE_LIMITED')) throw err;
       if (err instanceof StudioBudgetExhaustedError) {

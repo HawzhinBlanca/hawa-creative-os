@@ -245,3 +245,107 @@ The brief phrasing fuzz (`apps/core/test/brief-phrasing-fuzz.test.ts`, 428 seede
 **Results.** Fuzz, before → after this change alone: total 490 → 324; I1 0 → 0; I2 232 → **252**; I3 185 → 70; I4 32 → 2; I5 41 → 0; briefs with a violation 240 → 199. The I2 rise is 20 violations in 17 briefs that opened with no copy before and now draft: every one is a copy-extraction class (a closing glued to the last detail, the Sorani spelling of the client printed as a line, a greeting glued to an event-first sentence, "Oct." splitting a line, a bare "need a …"). So this change must not ship without the copy-extraction fix: alone, it turns those briefs from "a designer makes it" into a draft that prints the closing. The ratchet's I2 stays at 232 (it is never raised) and fails on this branch alone until the copy fix is merged. Remaining I3: 47 titles whose copy headline is "with these details" are now "KAAE: " (the safety net leaves the name empty; `copyTitle` in `request-copy-extraction.ts` should fall back to the next copy line when `titleName` returns `''`), 7 "KAAE with these details", 7 + 1 the client as the name (class 6). Remaining I4: 2 (class 11).
 
 **Verification.** `apps/core/test/brief-fuzz-intent-classes.test.ts`, 23 route and unit tests: the report's class-5, 8 and 4 reproductions and the title safety net; 18 failed before the change, and the 5 controls (a status question, a change, "thanks" alone, a greeting alone, and the rules' readings of them and of a cancel) passed before and after. `packages/creative/test/client-packs.test.ts`: 2 new tests (full names, and a name claimed as another pack's alias), both failing before. Three existing tests expected a no-client request without copy to open without the question; they now expect the question and open on the answer (`natural-language-friction-audit.test.ts` F9, `requester-intent-routing.test.ts` greeting and group mention). The 52 intake, requester, client-question, lifecycle-source, routing, chat, turn, canary, copy, title, fuzz, NLU and client-pack test files: 1284 passed, 1 skipped, 1 failed (the fuzz ratchet's I2, above). NLU evaluation unchanged: 349/356, costly errors 0. `pnpm typecheck` and `pnpm lint` pass.
+
+## Addendum: conversation fuzz (2026-10-03)
+
+**Date:** 2026-10-03. **Status:** implemented on branch `claude/convfuzz` (from `claude/release-3` b56020bf, live); not deployed.
+**Changes a foundation:** no. No migration, no new dependency, no paid call, no new phrase in the requester catalogue (the answers reuse `WITHDRAW_MESSAGES.askCancel`/`withdrawn`, `ROUTING_MESSAGES.statusAwaitingAnswer`/`unhappyPassed`/`forwardedToOffice`/`thanks`). One new stored value: the ADR-235 client-question resolution outcome `withdrawn`.
+**Supersedes:** ADR-251 §2 item 1, last bullet ("a cancel that names its design … still withdraws the only design"), and ADR-255's immediate withdrawal of several designs named together. Every cancel now asks first.
+
+**Before.** The brief phrasing fuzz holds only the first message, while live bugs have come from the turns after it. The conversation fuzz (`apps/core/test/fixtures/conversation-fuzz.ts`, run as four shards: `conversation-fuzz.test.ts` and `conversation-fuzz-2/3/4.test.ts`, about 55 s) plays 320 seeded conversations, 1166 requester turns, through the worker's ChatInbox, Core's real `/v1/internal/telegram/intake`, TelegramSender and RequestLifecycle (`fixtures/conversation-harness.ts`; real test Postgres, no model and no paid call). Each conversation is an opening brief, then 1 to 4 follow-ups: a change, an opinion, a status question, a deadline, a cancel and its "yes"/"no", thanks, small talk, a second brief, a redo, or a reply to an older bot message. The design moves on between turns (designing → with the office → delivered). A quarter of the conversations are in Sorani, using only lines already in the repository's tests, and a tenth are in Arabic. Every turn is held to seven invariants:
+
+- J1: no round or request without an explicit new brief or redo.
+- J2: a cancel asks first, and only "yes" withdraws.
+- J3: a change never opens a request or loses its words.
+- J4: replies are natural and in the requester's language.
+- J5: thanks and small talk start, ask and cancel nothing.
+- J6: a negative opinion is never thanked.
+- J7: "passed to the office" means the office was alerted.
+
+On b56020bf there were **69 violations**:
+
+| Invariant | Count |
+|---|---:|
+| J1 | 11 |
+| J2 | 41 |
+| J3 | 15 |
+| J4 | 0 |
+| J5 | 2 |
+| J6 | 0 |
+| J7 | 0 |
+
+Two kinds of friction outside the invariants: 35 opinions were asked "Is this a change to …, or a new design?", and 8 status questions were told "I don't have a design in progress" while the brief waited for "who is this design for?". The report is `output/research/2026-10-03-conversation-fuzz/REPORT.md`.
+
+**Decisions** (`requester-turn.ts`, `telegram-classifier.ts`, `lifecycle-client-question.ts`, `lifecycle-chat-answers.ts`, `lifecycle-internal.routes.ts`):
+
+1. **Every cancel asks first (J2, 36 + 5).** `planTurn` ends with `askBeforeWithdrawing`. A withdrawal without `resolves`, the answer to a question, becomes "Do you want me to cancel X?". This covers a named cancel ("cancel it", "we don't need it anymore", "please cancel the poster", "stop, we don't need it", the Sorani "cancel it"), a reply to the design's message, and a model's sure reading. Several designs named together get one question naming them all ("Do you want me to cancel both X and Y?"). "Yes" withdraws through the existing confirm path; "no" keeps the design and says where it stands. Choosing the design from "Which design is this for?" still counts as the answer. A cancel too late to withdraw is told so, as before. Cost: one more message for a cancel that named its design. Reason: the owner's live incident ("never mind" withdrew a design) and the fuzz show that wording alone cannot tell a sure cancel. The question is cheap; a wrong withdrawal is not.
+2. **Arabic cancel words are cancel words (J2, 5).** "Cancel the design please" and "we don't need it any more" (`ARABIC_CANCEL`: the verb and the noun for "cancel", and "we don't need") were asked "a change or a new design?". They are now `cancelWords`, asked as a cancel. This needs a native speaker's review.
+3. **A change with nothing on the way never opens a request (J1/J3, 8 + 8).** Examples: "make the text bold" just after the chat's design was cancelled; "use blue instead" while the bot waited to hear who a brief was for. Each opened a request for a designer named by the change: "A designer will make make the text bold", or "Change the Date to". The words now go to the office (`forward`). Only a change with a subject of its own and that subject's copy still opens, as before: "use these for the science fair poster, 12 October 2026 at the Erbil hall", sent with an album. `lifecycle-internal-intake.test.ts` had pinned the old behaviour for "Please change the background to navy" in a new chat; it now expects the office.
+4. **Status words never answer "who is this design for?" (J1, 2).** "Any update?" and "any news on the poster?" started with "any". They were read as "anyone" (the office chooses), and the kept brief opened for the office. "Any" now counts as an answer only on its own. "Anyone" and "whatever" still count, but never when followed by "update", "news", "progress", "word" or "idea".
+5. **A brief waiting for "who is it for?" is part of the conversation (friction 8; a J2-type gap).** Such a brief is not a request yet, so the planner cannot see it.
+   - A status question with nothing else open now hears "X is waiting for your answer to one question: Who is this design for? …".
+   - A cancel with nothing else to cancel is asked "Do you want me to cancel X?" (the question's option is `brief:<update>`). "Yes" records the resolution `withdrawn`, so the brief never opens, not even at the question's timeout (`clientQuestionTimeout` skips any resolved question). "No" repeats the question.
+   - Before: "There's nothing open for me to cancel right now", and the brief opened for the office 30 minutes later.
+   - X is the brief's event name in English, or "your design" in the requester's language.
+6. **Unhappy words are an unhappy reaction (J6/J1; friction 35).**
+   - Covered: "I don't like it", "it's ugly", "looks cheap", "not quite", "hmm not what I expected", "meh", "too busy", and Sorani "the design is ugly".
+   - Before, they got "Is this a change to …, or a new design?", or the design's status with the words dropped. Or they were kept as a change: while the design was being made, the round that starts when the draft finishes (ADR-230 §6) would then be paid for with "looks cheap" as its instruction.
+   - `isUnhappyOpinion` (whole message, at most 80 characters, nothing named to change) reads them as ADR-252's unhappy emoji is read. The office is alerted ("wrote that they are not happy"), and the requester hears "I'm sorry it isn't right. I've let the office know; tell me what you'd like changed."
+   - The ADR-284 F4 case (the only design is with a designer and has no draft yet) still sends them to the designer as a note.
+   - A clause that names a part ("remove the gold, it looks cheap", "the colours are awful") stays a change. So does a refusal ("not approved", "it's not good").
+7. **A refusal said while the design is being made starts no round (J1, 1).** "Not approved" in Sorani, said while designing, was kept as a change, and the next round was paid for with it as its only instruction. Refusal-only words while designing now go to the office (`forward`).
+8. **Small words (J3, 7; J5, 2).**
+   - "less text please", "fewer words", "more space" and "can we lose the subtitle" are changes. They were read as chat, or forwarded as a question.
+   - "Have a nice day/weekend", "not bad" and Arabic "thank you very much" are thanks.
+   - "My boss is happy with it" and "the client loves it", said alone, are praise. They were asked "a change or a new design?".
+
+**Results.** Fuzz, before → after:
+
+| Measure | Before | After |
+|---|---:|---:|
+| Violations, total | 69 | **0** |
+| J1 | 11 | 0 |
+| J2 | 41 | 0 |
+| J3 | 15 | 0 |
+| J5 | 2 | 0 |
+| Opinions asked "a change or a new design?" | 35 | 0 |
+| "Nothing in progress" while a brief waits | 8 | 0 |
+
+J4, J6 and J7 were 0 before and stay 0. The remaining friction is 9 changes asked "which design?" with two designs open, which is right. The ratchet (`CONVERSATION_FUZZ_BASELINE`, `CONVERSATION_FUZZ_FRICTION`) is pinned at zero for every shard. The NLU evaluation went from 349/356 to 350/356, with 0 costly errors. The brief phrasing fuzz stays at 0.
+
+**Verification.**
+- `apps/core/test/conversation-fuzz-classes.test.ts` has 31 route tests, one block per class. 29 failed on b56020bf. The 2 controls ("no" keeps the design; "anyone" lets the office choose) passed before and after.
+- Tests updated to the new decision. Where these tests used to see a withdrawal, they now see a question and then "yes":
+  - `requester-turn-confirmations.test.ts`
+  - `requester-cancel-several.test.ts`
+  - `requester-turn-nlu-eval-fixes.test.ts`
+  - `requester-intake-hunt3.test.ts`
+  - `requester-intent-routing.test.ts`
+  - `natural-language-friction-audit.test.ts`
+  - the stress scripts S044, S080, S082 and S087
+- `canary-friction-2026-10-03.test.ts` now expects the unhappy answer instead of "a change or a new design?" when the F4 conditions do not hold.
+- `lifecycle-internal-intake.test.ts`: the styling-only message goes to the office.
+- The intake, requester, client-question, client-named, lifecycle, natural, routing, chat, turn, canary, copy, title, fuzz and NLU test files, including the four fuzz shards: 76 files, 1501 passed, 2 skipped. `pnpm typecheck` and `pnpm lint` pass.
+
+**Not addressed.**
+- Change words sent while a brief waits for "who is it for?" go to the office as words "about a design that is no longer open"; the alert should say the brief is waiting.
+- A deadline sent at that point is answered with the waiting question, and its words are not passed on.
+- A bare organisation name with nothing open ("KAAE") opens a request for a designer.
+- "The logo looks squashed" (NLU held-out case ho3-change-02) is still asked "a change or a new design?".
+- The Arabic cancel and thanks words need native review.
+
+## Addendum: the conversation fuzz's four open issues (2026-10-03)
+
+**Date:** 2026-10-03. **Status:** implemented on branch `claude/convfix2` (from `claude/release-3` 007bc040, live); not deployed. **Changes a foundation:** no. No migration, dependency or paid call. Two new inbox-ledger row kinds (first write wins): `lifecycle_client_question_note` (words kept with a waiting brief) and `lifecycle_client_named` (an organisation named alone). Four new requester phrases in `CLIENT_QUESTION_MESSAGES`. Their Sorani joins phrases already in the catalogue and is listed in SORANI_REVIEW.md.
+
+1. **A change while the brief waits for "who is this design for?"** used to go to the office with an alert saying the design is "no longer open". Now no design on the way takes the change, so it is kept with the waiting brief. The requester hears "Got it. I've kept that with **X**." followed by the question again. There is no alert. When the brief opens (after the answer, the office's choice or the timeout), the change is added to the request's words and to its design instructions. It never becomes the request's copy or its name.
+2. **A deadline sent at that point** used to get the waiting question back, and its words were lost. Now it is kept the same way and said back: "Noted — by tomorrow. Who is this design for? …". With no timing words to repeat ("it's urgent"), the reply is "Noted. I've kept the timing with **X**. …". The deadline reaches the request's words, which the office reads.
+3. **An organisation's name sent alone with nothing open** used to misfire. "KAAE" and "for Erbil Chess Club" opened a request for a designer. "It's for the Erbil Chess Club" went to the office as words about a design "no longer open". Now the requester is asked "What would you like designed for **Erbil Chess Club**? …" and nothing opens. A bare name is short, names no design, part or request, and is an office client or reads as an organisation (the ADR-235 `namesUnknownOrganisation` signs). The brief that follows within 30 minutes is for that organisation, so its sender is not asked "who is this design for?" again. A known client opens for that client; an unknown one goes to the office to choose, as an unmatched answer does.
+4. **"The logo looks squashed"** used to be asked "a change or a new design?". Now a part of the design that "looks", "is" or "seems" squashed, stretched, distorted, crooked, tilted, misaligned, overlapping, low-res and the like counts as found wanting, so it is a change to the open design. The same applies to a part named bare at the start of the words ("text is cut off").
+
+**Verification.**
+- `conversation-fuzz-classes.test.ts` gained classes 9 to 12: 18 route tests. 14 of them failed on 007bc040. The 4 that passed are the control ("Logo for Erbil Chess Club" still reads as a brief) and three visual complaints the old rules already caught.
+- The intake-related core test files (the pattern above): 80 files, 1734 passed, 2 skipped.
+- The brief phrasing fuzz and all four conversation fuzz shards stay at 0. Neither ratchet changed.
+- The NLU evaluation went from 350/356 to 351/356 (ho3-change-02), with 0 costly errors.
+- `pnpm typecheck` and `pnpm lint` pass.

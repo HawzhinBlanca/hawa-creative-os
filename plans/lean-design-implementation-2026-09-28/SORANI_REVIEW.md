@@ -71,7 +71,7 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | Id | English | Sorani | Review |
 |---|---|---|---|
 | `inbox.answerTaken` | Thanks, I'll use that and carry on with the same design. | سوپاس، ئەوە بەکاردەهێنم و هەمان دیزاین تەواو دەکەم. | needs native review |
-| `inbox.changeTaken` | Got it. I'm making those changes now; the office checks the new draft before it comes to you. | تێگەیشتم. ئێستا ئەو گۆڕانکارییانە دەکەم؛ ئۆفیسەکە پێش ئەوەی ڕەشنووسە نوێیەکە بۆت بێت سەیری دەکات. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
+| `inbox.changeTaken` | Got it. I'm making those changes now; the office checks the new draft before it comes to you. | تێگەیشتم. ئێستا ئەو گۆڕانکارییانە دەکەم؛ ئۆفیسەکە پێش ئەوەی ڕەشنووسە نوێیەکە بۆت بێت سەیری دەکات. | needs native review |
 | `inbox.whichWaitingDesign` | More than one of your designs is waiting for changes. Which one is this for? Just tell me its name. | زیاتر لە یەک دیزاین چاوەڕێی گۆڕانکارییەکانی تۆن. ئەمە بۆ کامیانە؟ ناوەکەی بنووسە. | needs native review |
 | `inbox.staleButton` | That design is now with the office. If anything should change, just tell me here. | ئەو دیزاینە ئێستا لای ئۆفیسەکەیە. ئەگەر شتێک پێویستی بە گۆڕین هەیە، لێرە پێم بڵێ. | needs native review |
 | `inbox.whatToDesign` | What would you like designed? Tell me in your own words, with the text that should go on it. | چیت دەوێت دیزاین بکرێت؟ بە وشەی خۆت پێم بڵێ، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت. | needs native review |
@@ -96,8 +96,9 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 
 | Id | English | Sorani | Review |
 |---|---|---|---|
+| `routing.statusHeld` | {title} is paused at your request. New design work is waiting for the office to resume it; work already admitted may still finish. | {title} بە داواکاریی تۆ ڕاگیراوە. کاری نوێی دیزاین چاوەڕێیە ئۆفیسەکە دووبارە دەستی پێ بکاتەوە؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review |
 | `routing.statusDesigning` | {title} is being designed right now. The draft usually takes a few minutes; the office checks it before it comes to you. | {title} ئێستا دیزاین دەکرێت. ڕەشنووسەکە زۆرجار چەند خولەکێک دەخایەنێت؛ ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات. | needs native review |
-| `routing.statusDesigningSlow` | {title} is taking longer than usual. I've asked the office to look into it; they'll follow up here. | {title} لە ئاسایی زیاتر دەخایەنێت. داوام لە ئۆفیسەکە کرد سەیری بکەن؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
+| `routing.statusDesigningSlow` | {title} is taking longer than usual. I've asked the office to look into it; they'll follow up here. | {title} لە ئاسایی زیاتر دەخایەنێت. داوام لە ئۆفیسەکە کرد سەیری بکەن؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 | `routing.statusManual` | A designer at the office is working on {title}. It will be sent here when it is ready. | دیزاینەرێک لە ئۆفیسەکە کار لەسەر {title} دەکات. کە ئامادە بوو لێرە بۆت دەنێردرێت. | needs native review |
 | `routing.statusWaitingForChanges` | {title} is waiting for your changes. Just tell me what you would like changed. | {title} چاوەڕێی گۆڕانکارییەکانی تۆیە. تەنها پێم بڵێ چیت دەوێت بگۆڕدرێت. | needs native review |
 | `routing.statusAwaitingAnswer` | {title} is waiting for your answer to one question: {question} | {title} چاوەڕێی وەڵامی تۆیە بۆ یەک پرسیار: {question} | needs native review |
@@ -115,23 +116,39 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `routing.undoKept` | {title} had already been stopped, so I can't restart it myself. If you still need it, send me the request again. | {title} پێشتر ڕاگیرابوو، بۆیە خۆم ناتوانم دووبارە دەستی پێ بکەمەوە. ئەگەر هێشتا پێویستت پێیەتی، داواکارییەکە دووبارە بۆم بنێرەوە. | needs native review |
 | `routing.forwardedToOffice` | I've passed your message to the office; they'll follow up here. | پەیامەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 | `routing.keptForOffice` | I've kept your message for the office; they'll follow up here. | پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە. | needs native review |
-| `routing.questionPassed` | I can't answer that myself, so I've passed your question to the office; they'll reply here. | ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
-| `routing.questionKept` | I can't answer that myself, so I've kept your question for the office; they'll reply here. | ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
+| `routing.questionPassed` | I can't answer that myself, so I've passed your question to the office; they'll reply here. | ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
+| `routing.questionKept` | I can't answer that myself, so I've kept your question for the office; they'll reply here. | ناتوانم خۆم وەڵامی ئەوە بدەمەوە، بۆیە پرسیارەکەتم بۆ ئۆفیسەکە هەڵگرت؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 | `routing.nothingToChange` | I don't have a design in progress here to change. Tell me what you'd like designed, with the text that should go on it. | ئێستا هیچ دیزاینێکم لە دەستدا نییە بۆ گۆڕین. پێم بڵێ چیت دەوێت دیزاین بکرێت، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت. | needs native review |
 | `routing.askChangeOrNew` | Is this a change to {title}, or a new design? | ئەمە گۆڕانکارییە لە {title}، یان دیزاینێکی نوێیە؟ | needs native review |
 | `routing.askCancel` | Do you want me to ask the office to cancel {title}? | دەتەوێت داوا لە ئۆفیسەکە بکەم {title} هەڵبوەشێنێتەوە؟ | needs native review |
 | `routing.askIsThisOne` | Is this for {title}? | ئەمە بۆ {title}ە؟ | needs native review |
 | `routing.askWhichDesign` | Which design is this for?⏎{list} | ئەمە بۆ کام دیزاینە؟⏎{list} | needs native review |
+| `routing.askRedoOrNew` | Do you mean redo {title}, or a new design? | مەبەستت ئەوەیە {title} دووبارە بکەمەوە، یان دیزاینێکی نوێ؟ | needs native review |
+| `routing.askWhichRedo` | Which one should I redo?⏎{list} | کامیان دووبارە بکەمەوە؟⏎{list} | needs native review |
+| `routing.askOneAtATime` | I can only take this for one design at a time. Which one should it go to first?⏎{list}⏎After that, send it again for the other one. | لە یەک کاتدا تەنها دەتوانم ئەمە بۆ یەک دیزاین وەربگرم. سەرەتا بۆ کامیان بێت؟⏎{list}⏎دواتر، دووبارە بۆ ئەوی تر بینێرە. | needs native review |
 | `routing.aNewDesign` | A new design | دیزاینێکی نوێ | needs native review |
-| `routing.askOneAtATime` | I can only take this for one design at a time. Which one should it go to first?⏎{list}⏎After that, send it again for the other one. | لە یەک کاتدا تەنها دەتوانم ئەمە بۆ یەک دیزاین وەربگرم. سەرەتا بۆ کامیان بێت؟⏎{list}⏎دواتر، دووبارە بۆ ئەوی تر بینێرە. | needs native review (ADR-255, several designs named together, 2026-10-02) |
 | `routing.cancelAsked` | OK. I've asked the office to cancel {title}. | باشە. داوام لە ئۆفیسەکە کرد کە {title} هەڵبوەشێنێتەوە. | needs native review |
-| `routing.changeAddedWhileDesigning` | Got it. I've kept that with {title} for the office; they'll see it before the design is sent to you. | تێگەیشتم. ئەوەم لەگەڵ {title} بۆ ئۆفیسەکە هەڵگرت؛ پێش ناردنی دیزاینەکە دەیبینن. | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.changeAddedNextRound` | Got it. I'll add that to {title} once the current draft is done, or pass it to the office if I can't. | تێگەیشتم. کە ڕەشنووسەکەی ئێستا تەواو بوو، ئەوە بۆ {title} زیاد دەکەم، یان ئەگەر نەمتوانی دەیدەمە ئۆفیسەکە. | needs native review (ADR-239 follow-up, promises nothing before the next round is admitted, 2026-10-02; was ADR-230 section 6) |
+| `routing.holdConfirmed` | I've paused {title}. New design work will wait until the office resumes it; work already in progress may still finish. | {title} ڕاگیرا. کاری نوێی دیزاین چاوەڕێ دەکات تا ئۆفیس دووبارە دەستی پێبکات؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review |
+| `routing.holdAsked` | I've asked the office to hold {title}. I'll keep your message with the design. | داوام لە ئۆفیس کرد {title} ڕابگرێت. نامەکەت لەگەڵ دیزاینەکە دەپارێزم. | needs native review |
+| `routing.changeAddedWhileDesigning` | Got it. I've kept that with {title} for the office; they'll see it before the design is sent to you. | تێگەیشتم. ئەوەم لەگەڵ {title} بۆ ئۆفیسەکە هەڵگرت؛ پێش ناردنی دیزاینەکە دەیبینن. | needs native review |
+| `routing.changeAddedNextRound` | Got it. I'll add that to {title} once the current draft is done, or pass it to the office if I can't. | تێگەیشتم. کە ڕەشنووسەکەی ئێستا تەواو بوو، ئەوە بۆ {title} زیاد دەکەم، یان ئەگەر نەمتوانی دەیدەمە ئۆفیسەکە. | needs native review |
 | `routing.changePassedInReview` | Got it. The office is checking {title} now, and I've passed your change to them. | تێگەیشتم. ئۆفیسەکە ئێستا سەیری {title} دەکات، و گۆڕانکارییەکەتم پێیان گەیاند. | needs native review |
 | `routing.changePassedDelivering` | {title} is being sent to you now; I've passed your change to the office. | {title} ئێستا بۆت دەنێردرێت؛ گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە. | needs native review |
 | `routing.changePassedDelivered` | {title} was already delivered; I've passed your change to the office. | {title} پێشتر گەیەندرابوو؛ گۆڕانکارییەکەتم گەیاندە ئۆفیسەکە. | needs native review |
 | `routing.approvalPassed` | Thanks! I've told the office you're happy with {title}. They give it a final check before it's sent. | سوپاس! بە ئۆفیسەکەم ڕاگەیاند کە تۆ ڕازیت بە {title}. پێش ناردن بۆ دواجار سەیری دەکەن. | needs native review |
 | `routing.deadlinePassed` | Noted. I've told the office about the timing for {title}. | تێبینی کرا. سەبارەت بە کاتی {title} ئۆفیسەکەم ئاگادار کردەوە. | needs native review |
+| `routing.redoStarted` | I'll redo {title} — the new version follows what you said, and the office checks it before it comes to you. | {title} دووبارە دەکەمەوە — وەشانە نوێیەکە بەپێی قسەکانت دەبێت، و ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات. | needs native review |
+| `routing.redoWhileDesigning` | {title} is still being made, so I can't start it again yet. I've kept what you said with it for the office; they'll see it before the design comes to you. | {title} هێشتا دروست دەکرێت، بۆیە ناتوانم ئێستا دووبارەی بکەمەوە. قسەکانتم لەگەڵیدا بۆ ئۆفیسەکە هەڵگرت؛ پێش ئەوەی دیزاینەکە بۆت بێت دەیبینن. | needs native review |
+| `routing.redoWithOffice` | {title} is with the office for a final check, so I haven't started a new version. I've passed what you said to them; they'll follow up here. | {title} لای ئۆفیسەکەیە بۆ دوایین پشکنین، بۆیە وەشانێکی نوێم دەست پێ نەکردووە. قسەکانتم گەیاندە ئەوان؛ لێرە وەڵامت دەدەنەوە. | needs native review |
+| `routing.redoPassedApproved` | {title} is already approved, so I haven't started a new version. I've passed what you said to the office; they'll follow up here. | {title} پێشتر پەسەند کراوە، بۆیە وەشانێکی نوێم دەست پێ نەکردووە. قسەکانتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
+| `routing.redoPassedDelivered` | I can't start a new version of {title} by myself, so I've passed what you said to the office; they'll follow up here. | ناتوانم خۆم وەشانێکی نوێی {title} دەست پێ بکەم، بۆیە قسەکانتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
+| `routing.redoPassedDesigner` | A designer at the office is working on {title}, so I've passed what you said to them; they'll follow up here. | دیزاینەرێک لە ئۆفیسەکە کار لەسەر {title} دەکات، بۆیە قسەکانتم گەیاندە ئەوان؛ لێرە وەڵامت دەدەنەوە. | needs native review |
+| `routing.askedJustNow` | asked for just now | ئێستا داواکرا | needs native review |
+| `routing.askedMinutesAgo` | asked for {n} minutes ago | پێش {n} خولەک داواکرا | needs native review |
+| `routing.askedToday` | asked for today at {time} | ئەمڕۆ کاتژمێر {time} داواکرا | needs native review |
+| `routing.askedYesterday` | asked for yesterday at {time} | دوێنێ کاتژمێر {time} داواکرا | needs native review |
+| `routing.askedDaysAgo` | asked for {n} days ago | پێش {n} ڕۆژ داواکرا | needs native review |
+| `routing.versionN` | version {n} | وەشانی {n} | needs native review |
 | `routing.deliveryRequestPassed` | Got it. I've passed your request about {title} to the office; they'll follow up here. | تێگەیشتم. داواکارییەکەتم سەبارەت بە {title} گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review |
 
 ## conversation
@@ -222,8 +239,8 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `albums.captionCutAgain` | I still need the rest of your text after "…{tail}". Please send it as a message, or send the whole text again. | هێشتا پێویستم بە ماوەی دەقەکەتە دوای «…{tail}». تکایە وەک نامەیەک بینێرە، یان هەموو دەقەکە دووبارە بنێرەوە. | needs native review |
 | `albums.captionCutCancelled` | OK, I won't make anything with these photos. Send them again whenever you're ready. | باشە، هیچ شتێک بەم وێنانە دروست ناکەم. هەر کاتێک ئامادە بوویت دووبارە بیاننێرەوە. | needs native review |
 | `albums.captionCutLapsed` | I didn't receive the rest of your text, so I haven't started a design with these photos. Whenever you're ready, send the photos again and then the whole text as a message. | ماوەی دەقەکەتم پێنەگەیشت، بۆیە هێشتا دیزاینم بەم وێنانە دەست پێنەکردووە. هەر کاتێک ئامادە بوویت، وێنەکان دووبارە بنێرەوە و پاشان هەموو دەقەکە وەک نامەیەک بنێرە. | needs native review |
-| `albums.burstAdded` | Got the photos. I've added them to {title}. | وێنەکانم وەرگرت و بۆ {title} زیادم کردن. | needs native review (ADR-160 addendum, photo bursts) |
-| `albums.burstPassed` | Got the photos. {title} is already being made, so I've passed the photos to the office to use. | وێنەکانم وەرگرت. {title} پێشتر دەستی پێکراوە، بۆیە وێنەکانم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاریان بهێنن. | needs native review (ADR-160 addendum, photo bursts) |
+| `albums.burstAdded` | Got the photos. I've added them to {title}. | وێنەکانم وەرگرت و بۆ {title} زیادم کردن. | needs native review |
+| `albums.burstPassed` | Got the photos. {title} is already being made, so I've passed the photos to the office to use. | وێنەکانم وەرگرت. {title} پێشتر دەستی پێکراوە، بۆیە وێنەکانم گەیاندە ئۆفیسەکە بۆ ئەوەی بەکاریان بهێنن. | needs native review |
 | `albums.photoMissing` | One of your photos could not be saved, so I have not started a design. Please send the photos again. | یەکێک لە وێنەکانت پاشەکەوت نەکرا، بۆیە هێشتا دیزاینم دەست پێنەکردووە. تکایە وێنەکان دووبارە بنێرەوە. | needs native review |
 | `albums.onePhoto` | I received only one photo from this album. Please send the photos again together with what you would like designed. | تەنها یەک وێنەم لەم ئەلبومە پێگەیشت. تکایە وێنەکان دووبارە بنێرەوە لەگەڵ ئەوەی دەتەوێت چی دیزاین بکرێت. | needs native review |
 | `albums.captions` | Your photos came with different captions, so I am not sure which one is the brief. Please send the brief again as one message. | وێنەکانت چەند نووسینێکی جیاوازیان لەگەڵ بوو، بۆیە نازانم کامیان داواکارییەکەیە. تکایە داواکارییەکە وەک یەک نامە دووبارە بنێرەوە. | needs native review |
@@ -242,87 +259,85 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 
 | Id | English | Sorani | Review |
 |---|---|---|---|
-| `office.approvedSending` | Approved. Sending {title} to {requester} now. | پەسەند کرا. ئێستا {title} بۆ {requester} دەنێرم. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.sentBack` | Sent back for changes with your words. I have sent your note on {title} to {requester}; the next draft starts once they answer. | بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. تێبینییەکەتم لەسەر {title} بۆ {requester} نارد؛ ڕەشنووسی داهاتوو دوای وەڵامی ئەو دەست پێدەکات. | needs native review (ADR-182, natural-language stress fixes, 2026-09-30) |
-| `office.sentBackOwn` | Sent back for changes with your words. I have asked you, as the one who asked for {title}, what to change; the next draft starts once you answer. | بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. وەک داواکاری {title} لێت پرسیم چی بگۆڕدرێت؛ ڕەشنووسی داهاتوو دوای وەڵامەکەت دەست پێدەکات. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.rejected` | Rejected: {title}. Nothing was sent to {requester}. | ڕەتکرایەوە: {title}. هیچ شتێک بۆ {requester} نەنێردرا. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.whichDraft` | Which draft do you mean?⏎{list}⏎⏎Answer with the number or the name. | مەبەستت کام ڕەشنووسە؟⏎{list}⏎⏎بە ژمارە یان ناو وەڵام بدەرەوە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.whatToDo` | What should I do with {title}: approve it and send it, send it back with changes, or reject it? Just tell me in your own words. | چی لە {title} بکەم: پەسەندی بکەم و بینێرم، بۆ گۆڕانکاری بیگەڕێنمەوە، یان ڕەتی بکەمەوە؟ تەنها بە وشەکانی خۆت پێم بڵێ. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.lateWords` | Not approved yet: {requester} wrote after {title} reached the office:⏎⏎{words}⏎⏎Should I approve it and send it anyway, or send it back with a change? | هێشتا پەسەند نەکراوە: {requester} دوای ئەوەی {title} گەیشتە ئۆفیس ئەمەی نووسی:⏎⏎{words}⏎⏎سەرەڕای ئەمە پەسەندی بکەم و بینێرم، یان بە گۆڕانکارییەک بیگەڕێنمەوە؟ | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.alreadyApproved` | {title} was already approved, so I did nothing more. | {title} پێشتر پەسەند کرابوو، بۆیە هیچی ترم نەکرد. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.alreadySentBack` | {title} was already sent back for changes, so I did nothing more. | {title} پێشتر بۆ گۆڕانکاری گەڕێندرابووەوە، بۆیە هیچی ترم نەکرد. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.alreadyRejected` | {title} was already rejected, so I did nothing more. | {title} پێشتر ڕەتکرابووەوە، بۆیە هیچی ترم نەکرد. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.olderDraft` | That picture is of an earlier draft of {title}, so I did nothing. A newer draft is waiting for review. | ئەو وێنەیە هی ڕەشنووسێکی پێشووی {title}ـە، بۆیە هیچم نەکرد. ڕەشنووسێکی نوێتر چاوەڕێی پێداچوونەوەیە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.notWaiting` | {title} is not waiting for review right now, so I did nothing. | {title} ئێستا چاوەڕێی پێداچوونەوە نییە، بۆیە هیچم نەکرد. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.checkFailed` | I can't approve {title}: its automatic check did not pass. Tell me what to change, or fix it in Canva and check it again in Hawa Desk. | ناتوانم {title} پەسەند بکەم: پشکنینە خۆکارەکەی سەرنەکەوت. پێم بڵێ چی بگۆڕدرێت، یان لە Canva چاکی بکە و دووبارە لە Hawa Desk بیپشکنەوە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.useDesk` | I can't approve {title} from Telegram: the picture you were sent is not the checked file that would be delivered. Please approve it in Hawa Desk. | ناتوانم لە تێلێگرامەوە {title} پەسەند بکەم: ئەو وێنەیەی بۆت نێردرا ئەو فایلە پشکنراوە نییە کە دەنێردرێت. تکایە لە Hawa Desk پەسەندی بکە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.namedReviewer` | Decisions here need a named reviewer signed in to Hawa Desk, so {title} was not changed. | بڕیاردان لێرە پێویستی بە پێداچوونەوەکارێکی ناودارە کە لە Hawa Desk چووبێتە ژوورەوە، بۆیە {title} نەگۆڕدرا. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.madeByHand` | {title} is being made by hand, so it can't go back for automatic changes. Approve or reject it here, or change it in Hawa Desk. | {title} بە دەست دروست دەکرێت، بۆیە ناتوانرێت بۆ گۆڕانکاری خۆکار بگەڕێندرێتەوە. لێرە پەسەندی بکە یان ڕەتی بکەرەوە، یان لە Hawa Desk بیگۆڕە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.approvedNotSent` | Approved, but not sent yet: {requester} has just written about {title}:⏎⏎{words}⏎⏎Open Hawa Desk to read it and send the design. | پەسەند کرا، بەڵام هێشتا نەنێردراوە: {requester} ئێستا دەربارەی {title} نووسیویەتی:⏎⏎{words}⏎⏎Hawa Desk بکەرەوە بۆ خوێندنەوەی و ناردنی دیزاینەکە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.approvedSendFailed` | Approved, but sending {title} could not start. Please send it from Hawa Desk. | پەسەند کرا، بەڵام ناردنی {title} دەستی پێنەکرد. تکایە لە Hawa Deskـەوە بینێرە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.notRecorded` | I couldn't record that for {title}, so nothing was changed. Please use Hawa Desk. | نەمتوانی ئەوە بۆ {title} تۆمار بکەم، بۆیە هیچ شتێک نەگۆڕدرا. تکایە Hawa Desk بەکاربهێنە. | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.you` | you | تۆ | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.theRequester` | the requester | داواکارەکە | needs native review (ADR-040 addendum, office decisions in Telegram, 2026-09-30) |
-| `office.draftAlertDecide` | Just say “approved” to send it to {requester}, or tell me what to change. You can also decide in Hawa Desk. | تەنها بڵێ «پەسەندە» بۆ ئەوەی بۆ {requester} بنێردرێت، یان پێم بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت. | needs native review (ADR-239, rewritten in plain chat words with no reply target, 2026-10-01; was ADR-180) |
-| `office.sentWhen` | sent {when} | {when} نێردرا | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.justNow` | just now | ئێستا | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.aMinuteAgo` | a minute ago | پێش خولەکێک | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.minutesAgo` | {n} minutes ago | پێش {n} خولەک | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.todayAt` | today {time} | ئەمڕۆ {time} | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.yesterdayAt` | yesterday {time} | دوێنێ {time} | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.daysAgo` | {n} days ago | پێش {n} ڕۆژ | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.noPhotos` | no photos | بێ وێنە | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.onePhoto` | 1 photo | 1 وێنە | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.photos` | {n} photos | {n} وێنە | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.newest` | newest | نوێترین | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.fromRequester` | from {requester} | داواکراوە لەلایەن {requester} | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.aboutDraft` | About the {title} draft I sent you {when}: | دەربارەی ڕەشنووسی {title} کە {when} بۆم ناردیت: | needs native review (ADR-040 addendum, office draft choice, 2026-10-01) |
-| `office.lostTrack` | I've lost track of that question, so I haven't done anything. Just tell me again what you'd like me to do with the draft. | ئەو پرسیارەم لێ ون بوو، بۆیە هیچم نەکرد. تەنها جارێکی تر پێم بڵێ دەتەوێت چی لە ڕەشنووسەکە بکەم. | needs native review (ADR-239, rewritten in plain chat words with no reply target, 2026-10-01; was the ADR-040 addendum) |
+| `office.approvedSending` | Approved. Sending {title} to {requester} now. | پەسەند کرا. ئێستا {title} بۆ {requester} دەنێرم. | needs native review |
+| `office.sentBack` | Sent back for changes with your words. I have sent your note on {title} to {requester}; the next draft starts once they answer. | بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. تێبینییەکەتم لەسەر {title} بۆ {requester} نارد؛ ڕەشنووسی داهاتوو دوای وەڵامی ئەو دەست پێدەکات. | needs native review |
+| `office.sentBackOwn` | Sent back for changes with your words. I have asked you, as the one who asked for {title}, what to change; the next draft starts once you answer. | بە وشەکانی خۆت بۆ گۆڕانکاری گەڕێندرایەوە. وەک داواکاری {title} لێت پرسیم چی بگۆڕدرێت؛ ڕەشنووسی داهاتوو دوای وەڵامەکەت دەست پێدەکات. | needs native review |
+| `office.rejected` | Rejected: {title}. Nothing was sent to {requester}. | ڕەتکرایەوە: {title}. هیچ شتێک بۆ {requester} نەنێردرا. | needs native review |
+| `office.whichDraft` | Which draft do you mean?⏎{list}⏎⏎Answer with the number or the name. | مەبەستت کام ڕەشنووسە؟⏎{list}⏎⏎بە ژمارە یان ناو وەڵام بدەرەوە. | needs native review |
+| `office.lostTrack` | I've lost track of that question, so I haven't done anything. Just tell me again what you'd like me to do with the draft. | ئەو پرسیارەم لێ ون بوو، بۆیە هیچم نەکرد. تەنها جارێکی تر پێم بڵێ دەتەوێت چی لە ڕەشنووسەکە بکەم. | needs native review |
+| `office.sentWhen` | sent {when} | {when} نێردرا | needs native review |
+| `office.justNow` | just now | ئێستا | needs native review |
+| `office.aMinuteAgo` | a minute ago | پێش خولەکێک | needs native review |
+| `office.minutesAgo` | {n} minutes ago | پێش {n} خولەک | needs native review |
+| `office.todayAt` | today {time} | ئەمڕۆ {time} | needs native review |
+| `office.yesterdayAt` | yesterday {time} | دوێنێ {time} | needs native review |
+| `office.daysAgo` | {n} days ago | پێش {n} ڕۆژ | needs native review |
+| `office.noPhotos` | no photos | بێ وێنە | needs native review |
+| `office.onePhoto` | 1 photo | 1 وێنە | needs native review |
+| `office.photos` | {n} photos | {n} وێنە | needs native review |
+| `office.newest` | newest | نوێترین | needs native review |
+| `office.fromRequester` | from {requester} | داواکراوە لەلایەن {requester} | needs native review |
+| `office.aboutDraft` | About the {title} draft I sent you {when}: | دەربارەی ڕەشنووسی {title} کە {when} بۆم ناردیت: | needs native review |
+| `office.whatToDo` | What should I do with {title}: approve it and send it, send it back with changes, or reject it? Just tell me in your own words. | چی لە {title} بکەم: پەسەندی بکەم و بینێرم، بۆ گۆڕانکاری بیگەڕێنمەوە، یان ڕەتی بکەمەوە؟ تەنها بە وشەکانی خۆت پێم بڵێ. | needs native review |
+| `office.lateWords` | Not approved yet: {requester} wrote after {title} reached the office:⏎⏎{words}⏎⏎Should I approve it and send it anyway, or send it back with a change? | هێشتا پەسەند نەکراوە: {requester} دوای ئەوەی {title} گەیشتە ئۆفیس ئەمەی نووسی:⏎⏎{words}⏎⏎سەرەڕای ئەمە پەسەندی بکەم و بینێرم، یان بە گۆڕانکارییەک بیگەڕێنمەوە؟ | needs native review |
+| `office.alreadyApproved` | {title} was already approved, so I did nothing more. | {title} پێشتر پەسەند کرابوو، بۆیە هیچی ترم نەکرد. | needs native review |
+| `office.alreadySentBack` | {title} was already sent back for changes, so I did nothing more. | {title} پێشتر بۆ گۆڕانکاری گەڕێندرابووەوە، بۆیە هیچی ترم نەکرد. | needs native review |
+| `office.alreadyRejected` | {title} was already rejected, so I did nothing more. | {title} پێشتر ڕەتکرابووەوە، بۆیە هیچی ترم نەکرد. | needs native review |
+| `office.olderDraft` | That picture is of an earlier draft of {title}, so I did nothing. A newer draft is waiting for review. | ئەو وێنەیە هی ڕەشنووسێکی پێشووی {title}ـە، بۆیە هیچم نەکرد. ڕەشنووسێکی نوێتر چاوەڕێی پێداچوونەوەیە. | needs native review |
+| `office.notWaiting` | {title} is not waiting for review right now, so I did nothing. | {title} ئێستا چاوەڕێی پێداچوونەوە نییە، بۆیە هیچم نەکرد. | needs native review |
+| `office.checkFailed` | I can't approve {title}: its automatic check did not pass. Tell me what to change, or fix it in Canva and check it again in Hawa Desk. | ناتوانم {title} پەسەند بکەم: پشکنینە خۆکارەکەی سەرنەکەوت. پێم بڵێ چی بگۆڕدرێت، یان لە Canva چاکی بکە و دووبارە لە Hawa Desk بیپشکنەوە. | needs native review |
+| `office.useDesk` | I can't approve {title} from Telegram: the picture you were sent is not the checked file that would be delivered. Please approve it in Hawa Desk. | ناتوانم لە تێلێگرامەوە {title} پەسەند بکەم: ئەو وێنەیەی بۆت نێردرا ئەو فایلە پشکنراوە نییە کە دەنێردرێت. تکایە لە Hawa Desk پەسەندی بکە. | needs native review |
+| `office.namedReviewer` | Decisions here need a named reviewer signed in to Hawa Desk, so {title} was not changed. | بڕیاردان لێرە پێویستی بە پێداچوونەوەکارێکی ناودارە کە لە Hawa Desk چووبێتە ژوورەوە، بۆیە {title} نەگۆڕدرا. | needs native review |
+| `office.madeByHand` | {title} is being made by hand, so it can't go back for automatic changes. Approve or reject it here, or change it in Hawa Desk. | {title} بە دەست دروست دەکرێت، بۆیە ناتوانرێت بۆ گۆڕانکاری خۆکار بگەڕێندرێتەوە. لێرە پەسەندی بکە یان ڕەتی بکەرەوە، یان لە Hawa Desk بیگۆڕە. | needs native review |
+| `office.approvedNotSent` | Approved, but not sent yet: {requester} has just written about {title}:⏎⏎{words}⏎⏎Open Hawa Desk to read it and send the design. | پەسەند کرا، بەڵام هێشتا نەنێردراوە: {requester} ئێستا دەربارەی {title} نووسیویەتی:⏎⏎{words}⏎⏎Hawa Desk بکەرەوە بۆ خوێندنەوەی و ناردنی دیزاینەکە. | needs native review |
+| `office.approvedSendFailed` | Approved, but sending {title} could not start. Please send it from Hawa Desk. | پەسەند کرا، بەڵام ناردنی {title} دەستی پێنەکرد. تکایە لە Hawa Deskـەوە بینێرە. | needs native review |
+| `office.notRecorded` | I couldn't record that for {title}, so nothing was changed. Please use Hawa Desk. | نەمتوانی ئەوە بۆ {title} تۆمار بکەم، بۆیە هیچ شتێک نەگۆڕدرا. تکایە Hawa Desk بەکاربهێنە. | needs native review |
+| `office.draftAlertDecide` | Just say “approved” to send it to {requester}, or tell me what to change. You can also decide in Hawa Desk. | تەنها بڵێ «پەسەندە» بۆ ئەوەی بۆ {requester} بنێردرێت، یان پێم بڵێ چی بگۆڕدرێت. دەشتوانیت لە Hawa Desk بڕیار بدەیت. | needs native review |
+| `office.confirmSend` | Send {title} to {requester} now? | ئایا ئێستا {title} بۆ {requester} بنێرم؟ | needs native review |
+| `office.confirmSendOwn` | Approve {title} and send it to you now? | {title} پەسەند بکەم و ئێستا بۆت بنێرم؟ | needs native review |
+| `office.askedAgain` | I asked about {title} a while ago, so I haven't sent anything yet. | ماوەیەک لەمەوبەر دەربارەی {title} پرسیم، بۆیە هێشتا هیچم نەناردووە. | needs native review |
+| `office.notSent` | OK, I haven't sent {title}. It is still waiting; tell me what to change, or say send it when it's ready. | باشە، {title}م نەنارد. هێشتا چاوەڕێیە؛ پێم بڵێ چی بگۆڕم، یان هەر کاتێک ئامادە بوو بڵێ بینێرە. | needs native review |
+| `office.draftFacts` | {title} is from {requester}, sent to you {when}, with {photos}. What would you like me to do with it? | {title}: داواکار {requester}، {when} بۆت نێردرا، {photos}. دەتەوێت چی لێ بکەم؟ | needs native review |
+| `office.you` | you | تۆ | needs native review |
+| `office.theRequester` | the requester | داواکارەکە | needs native review |
 
-| `routing.statusHeld` | {title} is paused at your request. New design work is waiting for the office to resume it; work already admitted may still finish. | {title} بە داواکاریی تۆ ڕاگیراوە. کاری نوێی دیزاین چاوەڕێیە ئۆفیسەکە دووبارە دەستی پێ بکاتەوە؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |
-| `routing.holdConfirmed` | I've paused {title}. New design work will wait until the office resumes it; work already in progress may still finish. | {title} ڕاگیرا. کاری نوێی دیزاین چاوەڕێ دەکات تا ئۆفیس دووبارە دەستی پێبکات؛ کاری پێشتر دەستپێکراو لەوانەیە تەواو بێت. | needs native review (ADR184, 2026-10-01) |
-| `routing.holdAsked` | I've asked the office to hold {title}. I'll keep your message with the design. | داوام لە ئۆفیس کرد {title} ڕابگرێت. نامەکەت لەگەڵ دیزاینەکە دەپارێزم. | needs native review (ADR184, 2026-10-01) |
-| `office.confirmSend` | Send {title} to {requester} now? | ئایا ئێستا {title} بۆ {requester} بنێرم؟ | needs native review (ADR-200, office chat confirmation and questions, 2026-10-01) |
-| `office.confirmSendOwn` | Approve {title} and send it to you now? | {title} پەسەند بکەم و ئێستا بۆت بنێرم؟ | needs native review (ADR-200, office chat confirmation and questions, 2026-10-01) |
-| `office.askedAgain` | I asked about {title} a while ago, so I haven't sent anything yet. | ماوەیەک لەمەوبەر دەربارەی {title} پرسیم، بۆیە هێشتا هیچم نەناردووە. | needs native review (ADR-200, office chat confirmation and questions, 2026-10-01) |
-| `office.notSent` | OK, I haven't sent {title}. It is still waiting; tell me what to change, or say send it when it's ready. | باشە، {title}م نەنارد. هێشتا چاوەڕێیە؛ پێم بڵێ چی بگۆڕم، یان هەر کاتێک ئامادە بوو بڵێ بینێرە. | needs native review (ADR-200, office chat confirmation and questions, 2026-10-01) |
-| `office.draftFacts` | {title} is from {requester}, sent to you {when}, with {photos}. What would you like me to do with it? | {title}: داواکار {requester}، {when} بۆت نێردرا، {photos}. دەتەوێت چی لێ بکەم؟ | needs native review (ADR-200, office chat confirmation and questions, 2026-10-01) |
-| `routing.askRedoOrNew` | Do you mean redo {title}, or a new design? | مەبەستت ئەوەیە {title} دووبارە بکەمەوە، یان دیزاینێکی نوێ؟ | needs native review (ADR-200 addendum, redo words, 2026-10-01) |
-| `routing.askWhichRedo` | Which one should I redo?⏎{list} | کامیان دووبارە بکەمەوە؟⏎{list} | needs native review (ADR-200 addendum, redo words, 2026-10-01) |
-| `routing.redoStarted` | I'll redo {title} — the new version follows what you said, and the office checks it before it comes to you. | {title} دووبارە دەکەمەوە — وەشانە نوێیەکە بەپێی قسەکانت دەبێت، و ئۆفیسەکە پێش ئەوەی بۆت بێت سەیری دەکات. | needs native review (ADR-200 addendum, redo words, 2026-10-01) |
-| `routing.redoWhileDesigning` | {title} is still being made, so I can't start it again yet. I've kept what you said with it for the office; they'll see it before the design comes to you. | {title} هێشتا دروست دەکرێت، بۆیە ناتوانم ئێستا دووبارەی بکەمەوە. قسەکانتم لەگەڵیدا بۆ ئۆفیسەکە هەڵگرت؛ پێش ئەوەی دیزاینەکە بۆت بێت دەیبینن. | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.redoWithOffice` | {title} is with the office for a final check, so I haven't started a new version. I've passed what you said to them; they'll follow up here. | {title} لای ئۆفیسەکەیە بۆ دوایین پشکنین، بۆیە وەشانێکی نوێم دەست پێ نەکردووە. قسەکانتم گەیاندە ئەوان؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.redoPassedApproved` | {title} is already approved, so I haven't started a new version. I've passed what you said to the office; they'll follow up here. | {title} پێشتر پەسەند کراوە، بۆیە وەشانێکی نوێم دەست پێ نەکردووە. قسەکانتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.redoPassedDelivered` | I can't start a new version of {title} by myself, so I've passed what you said to the office; they'll follow up here. | ناتوانم خۆم وەشانێکی نوێی {title} دەست پێ بکەم، بۆیە قسەکانتم گەیاندە ئۆفیسەکە؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.redoPassedDesigner` | A designer at the office is working on {title}, so I've passed what you said to them; they'll follow up here. | دیزاینەرێک لە ئۆفیسەکە کار لەسەر {title} دەکات، بۆیە قسەکانتم گەیاندە ئەوان؛ لێرە وەڵامت دەدەنەوە. | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.askedJustNow` | asked for just now | ئێستا داواکرا | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.askedMinutesAgo` | asked for {n} minutes ago | پێش {n} خولەک داواکرا | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.askedToday` | asked for today at {time} | ئەمڕۆ کاتژمێر {time} داواکرا | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.askedYesterday` | asked for yesterday at {time} | دوێنێ کاتژمێر {time} داواکرا | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.askedDaysAgo` | asked for {n} days ago | پێش {n} ڕۆژ داواکرا | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `routing.versionN` | version {n} | وەشانی {n} | needs native review (ADR-231, truthful chat replies, 2026-10-01) |
-| `withdraw.withdrawn` | Cancelled {title}. Nothing more will be made for it. | {title} هەڵوەشێنرایەوە. هیچی تر بۆی دروست ناکرێت. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
-| `withdraw.withdrawnByOffice` | The office has cancelled {title}, so nothing more will be made for it. Tell me whenever you need a new design. | ئۆفیسەکە {title}ی هەڵوەشاندەوە، بۆیە هیچی تر بۆی دروست ناکرێت. هەر کاتێک دیزاینێکی نوێت پێویست بوو پێم بڵێ. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
-| `withdraw.askCancel` | Do you want me to cancel {title}? | دەتەوێت {title} هەڵبوەشێنمەوە؟ | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
-| `withdraw.askCancelBoth` | Do you want me to cancel both {first} and {second}? | دەتەوێت هەردووکیان هەڵبوەشێنمەوە، {first} و {second}؟ | needs native review (ADR-255, several designs named together, 2026-10-02) |
-| `withdraw.askCancelAll` | Do you want me to cancel all of these?⏎{list} | دەتەوێت هەموو ئەمانە هەڵبوەشێنمەوە؟⏎{list} | needs native review (ADR-255, several designs named together, 2026-10-02) |
-| `withdraw.tooLateApproved` | {title} was already approved, so I can't cancel it myself. I've told the office. | {title} پێشتر پەسەند کرابوو، بۆیە خۆم ناتوانم هەڵیبوەشێنمەوە. بە ئۆفیسەکەم ڕاگەیاند. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
-| `withdraw.tooLateDelivering` | {title} is already being sent to you, so I can't stop it. I've told the office. | {title} ئێستا بۆت دەنێردرێت، بۆیە ناتوانم ڕایبگرم. بە ئۆفیسەکەم ڕاگەیاند. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
-| `withdraw.tooLateDelivered` | {title} was already sent to you, so there is nothing left to cancel. I've told the office. | {title} پێشتر بۆت نێردرابوو، بۆیە هیچ نەماوە هەڵبوەشێنرێتەوە. بە ئۆفیسەکەم ڕاگەیاند. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
-| `withdraw.tooLateKept` | {title} can't be cancelled from here any more. I've kept your message for the office. | {title} چیتر لێرەوە هەڵناوەشێنرێتەوە. نامەکەتم بۆ ئۆفیسەکە هەڵگرت. | needs native review (ADR-230, withdrawing a request, 2026-10-01) |
-| `pendingRound.addingChanges` | Your first draft of {title} is done. I'm now adding what you asked while it was being made: {changes}. The office checks the new version before it comes to you. | یەکەم ڕەشنووسی {title} تەواو بوو. ئێستا ئەوەی لە کاتی دروستکردنیدا داوات کرد زیادی دەکەم: {changes}. ئۆفیسەکە پێش ئەوەی وەشانە نوێیەکە بۆت بێت سەیری دەکات. | needs native review (ADR-230 addendum, changes sent while a design was being made, 2026-10-01) |
-| `pendingRound.changesWithOffice` | Your draft of {title} was finished before your changes could be added: {changes}. The office has them and will see to them before the design comes to you. | ڕەشنووسی {title} پێش ئەوەی گۆڕانکارییەکانت زیاد بکرێن تەواو بوو: {changes}. ئۆفیسەکە ئاگاداریانە و پێش ئەوەی دیزاینەکە بۆت بێت جێبەجێیان دەکات. | needs native review (ADR-230 addendum, changes sent while a design was being made, 2026-10-01) |
-| `pendingRound.changesKept` | Your draft of {title} was finished before your changes could be added: {changes}. I've kept them for the office, which checks the design before it comes to you. | ڕەشنووسی {title} پێش ئەوەی گۆڕانکارییەکانت زیاد بکرێن تەواو بوو: {changes}. بۆ ئۆفیسەکەم هەڵگرتن، کە پێش ئەوەی دیزاینەکە بۆت بێت سەیری دەکات. | needs native review (ADR-230 addendum, changes sent while a design was being made, 2026-10-01) |
-| `withdraw.nothingToCancel` | There's nothing open for me to cancel right now. | ئێستا هیچ داواکارییەکی کراوە نییە کە هەڵیبوەشێنمەوە. | needs native review (ADR-230 addendum, natural cancel reading, 2026-10-01) |
-| `withdraw.deliveredNotCancellable` | {title} was already delivered, so there is nothing to cancel there. | {title} پێشتر گەیەندرابوو، بۆیە هیچ نییە لەوێ هەڵبوەشێنرێتەوە. | needs native review (ADR-230 addendum, natural cancel reading, 2026-10-01) |
-| `naming.theOneYouSent` | the one you sent {when} ({words}) | ئەوەی {when} ناردت ({words}) | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
-| `naming.theOneYouSentPlain` | the one you sent {when} | ئەوەی {when} ناردت | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
-| `naming.sentJustNow` | just now | ئێستا | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
-| `naming.sentMinutesAgo` | {n} minutes ago | پێش {n} خولەک | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
-| `naming.sentToday` | today at {time} | ئەمڕۆ کاتژمێر {time} | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
-| `naming.sentYesterday` | yesterday at {time} | دوێنێ کاتژمێر {time} | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
-| `naming.sentDaysAgo` | {n} days ago | پێش {n} ڕۆژ | needs native review (ADR-230 addendum, naming a request by when it was sent, 2026-10-01) |
-## clientQuestion (ADR-235)
+## withdraw
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `withdraw.withdrawn` | Cancelled {title}. Nothing more will be made for it. | {title} هەڵوەشێنرایەوە. هیچی تر بۆی دروست ناکرێت. | needs native review |
+| `withdraw.withdrawnByOffice` | The office has cancelled {title}, so nothing more will be made for it. Tell me whenever you need a new design. | ئۆفیسەکە {title}ی هەڵوەشاندەوە، بۆیە هیچی تر بۆی دروست ناکرێت. هەر کاتێک دیزاینێکی نوێت پێویست بوو پێم بڵێ. | needs native review |
+| `withdraw.askCancel` | Do you want me to cancel {title}? | دەتەوێت {title} هەڵبوەشێنمەوە؟ | needs native review |
+| `withdraw.askCancelBoth` | Do you want me to cancel both {first} and {second}? | دەتەوێت هەردووکیان هەڵبوەشێنمەوە، {first} و {second}؟ | needs native review |
+| `withdraw.askCancelAll` | Do you want me to cancel all of these?⏎{list} | دەتەوێت هەموو ئەمانە هەڵبوەشێنمەوە؟⏎{list} | needs native review |
+| `withdraw.tooLateApproved` | {title} was already approved, so I can't cancel it myself. I've told the office. | {title} پێشتر پەسەند کرابوو، بۆیە خۆم ناتوانم هەڵیبوەشێنمەوە. بە ئۆفیسەکەم ڕاگەیاند. | needs native review |
+| `withdraw.tooLateDelivering` | {title} is already being sent to you, so I can't stop it. I've told the office. | {title} ئێستا بۆت دەنێردرێت، بۆیە ناتوانم ڕایبگرم. بە ئۆفیسەکەم ڕاگەیاند. | needs native review |
+| `withdraw.tooLateDelivered` | {title} was already sent to you, so there is nothing left to cancel. I've told the office. | {title} پێشتر بۆت نێردرابوو، بۆیە هیچ نەماوە هەڵبوەشێنرێتەوە. بە ئۆفیسەکەم ڕاگەیاند. | needs native review |
+| `withdraw.tooLateKept` | {title} can't be cancelled from here any more. I've kept your message for the office. | {title} چیتر لێرەوە هەڵناوەشێنرێتەوە. نامەکەتم بۆ ئۆفیسەکە هەڵگرت. | needs native review |
+| `withdraw.nothingToCancel` | There's nothing open for me to cancel right now. | ئێستا هیچ داواکارییەکی کراوە نییە کە هەڵیبوەشێنمەوە. | needs native review |
+| `withdraw.deliveredNotCancellable` | {title} was already delivered, so there is nothing to cancel there. | {title} پێشتر گەیەندرابوو، بۆیە هیچ نییە لەوێ هەڵبوەشێنرێتەوە. | needs native review |
+
+## pendingRound
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `pendingRound.addingChanges` | Your first draft of {title} is done. I'm now adding what you asked while it was being made: {changes}. The office checks the new version before it comes to you. | یەکەم ڕەشنووسی {title} تەواو بوو. ئێستا ئەوەی لە کاتی دروستکردنیدا داوات کرد زیادی دەکەم: {changes}. ئۆفیسەکە پێش ئەوەی وەشانە نوێیەکە بۆت بێت سەیری دەکات. | needs native review |
+| `pendingRound.changesWithOffice` | Your draft of {title} was finished before your changes could be added: {changes}. The office has them and will see to them before the design comes to you. | ڕەشنووسی {title} پێش ئەوەی گۆڕانکارییەکانت زیاد بکرێن تەواو بوو: {changes}. ئۆفیسەکە ئاگاداریانە و پێش ئەوەی دیزاینەکە بۆت بێت جێبەجێیان دەکات. | needs native review |
+| `pendingRound.changesKept` | Your draft of {title} was finished before your changes could be added: {changes}. I've kept them for the office, which checks the design before it comes to you. | ڕەشنووسی {title} پێش ئەوەی گۆڕانکارییەکانت زیاد بکرێن تەواو بوو: {changes}. بۆ ئۆفیسەکەم هەڵگرتن، کە پێش ئەوەی دیزاینەکە بۆت بێت سەیری دەکات. | needs native review |
+
+## naming
+
+| Id | English | Sorani | Review |
+|---|---|---|---|
+| `naming.theOneYouSent` | the one you sent {when} ({words}) | ئەوەی {when} ناردت ({words}) | needs native review |
+| `naming.theOneYouSentPlain` | the one you sent {when} | ئەوەی {when} ناردت | needs native review |
+| `naming.sentJustNow` | just now | ئێستا | needs native review |
+| `naming.sentMinutesAgo` | {n} minutes ago | پێش {n} خولەک | needs native review |
+| `naming.sentToday` | today at {time} | ئەمڕۆ کاتژمێر {time} | needs native review |
+| `naming.sentYesterday` | yesterday at {time} | دوێنێ کاتژمێر {time} | needs native review |
+| `naming.sentDaysAgo` | {n} days ago | پێش {n} ڕۆژ | needs native review |
+
+## clientQuestion
 
 | Id | English | Sorani | Review |
 |---|---|---|---|
@@ -333,19 +348,22 @@ ADR-232: the request words, closing verbs, instruction openings and glue words r
 | `clientQuestion.expiredToOffice` | It's been a while since I asked, so I've passed your request to the office to choose the organisation. | ماوەیەکە پرسیارەکەم کردووە، بۆیە داواکارییەکەت ناردم بۆ ئۆفیسەکە بۆ ئەوەی دامەزراوەکە هەڵبژێرن. | needs native review |
 | `clientQuestion.timedOutToOffice` | I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. | نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن. | needs native review |
 | `clientQuestion.clientNoted` | Thanks. I've told the office that {title} is for {client}. | سوپاس. بە ئۆفیسەکەم ڕاگەیاند کە {title} بۆ {client}ە. | needs native review |
-| `clientQuestion.passedToOfficeDesigner` | No problem. I've passed it to the office, and they'll choose the organisation. A designer will make {title} and send it to you here. | کێشە نییە. ناردم بۆ ئۆفیسەکە، ئەوان دامەزراوەکە هەڵدەبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review (ADR-284 addendum, live canary 2026-10-03: two existing lines joined, no new wording) |
-| `clientQuestion.notMatchedToOfficeDesigner` | I couldn't match that to an organisation I know, so I've passed it to the office to choose. A designer will make {title} and send it to you here. | نەمتوانی ئەوە بە دامەزراوەیەک کە دەیناسم ببەستمەوە، بۆیە ناردم بۆ ئۆفیسەکە بۆ ئەوەی هەڵیبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review (ADR-284 addendum, live canary 2026-10-03: two existing lines joined, no new wording) |
-| `clientQuestion.expiredToOfficeDesigner` | It's been a while since I asked, so I've passed your request to the office to choose the organisation. A designer will make {title} and send it to you here. | ماوەیەکە پرسیارەکەم کردووە، بۆیە داواکارییەکەت ناردم بۆ ئۆفیسەکە بۆ ئەوەی دامەزراوەکە هەڵبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review (ADR-284 addendum, live canary 2026-10-03: two existing lines joined, no new wording) |
-| `clientQuestion.timedOutToOfficeDesigner` | I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. A designer will make {title} and send it to you here. | نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review (ADR-284 addendum, live canary 2026-10-03: two existing lines joined, no new wording) |
+| `clientQuestion.passedToOfficeDesigner` | No problem. I've passed it to the office, and they'll choose the organisation. A designer will make {title} and send it to you here. | کێشە نییە. ناردم بۆ ئۆفیسەکە، ئەوان دامەزراوەکە هەڵدەبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `clientQuestion.notMatchedToOfficeDesigner` | I couldn't match that to an organisation I know, so I've passed it to the office to choose. A designer will make {title} and send it to you here. | نەمتوانی ئەوە بە دامەزراوەیەک کە دەیناسم ببەستمەوە، بۆیە ناردم بۆ ئۆفیسەکە بۆ ئەوەی هەڵیبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `clientQuestion.expiredToOfficeDesigner` | It's been a while since I asked, so I've passed your request to the office to choose the organisation. A designer will make {title} and send it to you here. | ماوەیەکە پرسیارەکەم کردووە، بۆیە داواکارییەکەت ناردم بۆ ئۆفیسەکە بۆ ئەوەی دامەزراوەکە هەڵبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `clientQuestion.timedOutToOfficeDesigner` | I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. A designer will make {title} and send it to you here. | نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت. | needs native review |
+| `clientQuestion.changeKeptAsk` | Got it. I've kept that with {title}. {question} | تێگەیشتم. ئەوەم لەگەڵ {title} هەڵگرت. {question} | needs native review |
+| `clientQuestion.deadlineKeptAskWhen` | Noted — {when}. {question} | تێبینی کرا — {when}. ئەوەم لەگەڵ دیزاینەکە هەڵگرت. {question} | needs native review |
+| `clientQuestion.deadlineKeptAsk` | Noted. I've kept the timing with {title}. {question} | تێبینی کرا. ئەوەم لەگەڵ {title} هەڵگرت. {question} | needs native review |
+| `clientQuestion.whatToDesignFor` | What would you like designed for {client}? Tell me in your own words, with the text that should go on it. | چیت دەوێت بۆ {client} دیزاین بکرێت؟ بە وشەی خۆت پێم بڵێ، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت. | needs native review |
 
-
-## intakeLimits (ADR-250)
+## intakeLimits
 
 | Id | English | Sorani | Review |
 |---|---|---|---|
-| `intakeLimits.tooManyPassed` | This asks for {count} designs, more than I can start from one message, so I've passed it to the office. They'll follow up with you here. | ئەمە داوای {count} دیزاین دەکات، کە لەوە زیاترە لە یەک نامەدا دەستیان پێبکەم، بۆیە ناردم بۆ ئۆفیسەکە. لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
-| `intakeLimits.tooManyKept` | This asks for {count} designs, more than I can start from one message, so I've kept it for the office. They'll follow up with you here. | ئەمە داوای {count} دیزاین دەکات، کە لەوە زیاترە لە یەک نامەدا دەستیان پێبکەم، بۆیە بۆ ئۆفیسەکەم هەڵگرت. لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
-| `intakeLimits.sizePassed` | I can't make a design at {size} myself, so I've passed your message to the office. They'll find a size that works and follow up with you here. | خۆم ناتوانم دیزاینێک بە قەبارەی {size} دروست بکەم، بۆیە پەیامەکەتم گەیاندە ئۆفیسەکە. قەبارەیەکی گونجاو دەدۆزنەوە و لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
-| `intakeLimits.sizeKept` | I can't make a design at {size} myself, so I've kept your message for the office. They'll find a size that works and follow up with you here. | خۆم ناتوانم دیزاینێک بە قەبارەی {size} دروست بکەم، بۆیە پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت. قەبارەیەکی گونجاو دەدۆزنەوە و لێرە وەڵامت دەدەنەوە. | needs native review (ADR-250, a brief the bot cannot start by itself, 2026-10-02) |
+| `intakeLimits.tooManyPassed` | This asks for {count} designs, more than I can start from one message, so I've passed it to the office. They'll follow up with you here. | ئەمە داوای {count} دیزاین دەکات، کە لەوە زیاترە لە یەک نامەدا دەستیان پێبکەم، بۆیە ناردم بۆ ئۆفیسەکە. لێرە وەڵامت دەدەنەوە. | needs native review |
+| `intakeLimits.tooManyKept` | This asks for {count} designs, more than I can start from one message, so I've kept it for the office. They'll follow up with you here. | ئەمە داوای {count} دیزاین دەکات، کە لەوە زیاترە لە یەک نامەدا دەستیان پێبکەم، بۆیە بۆ ئۆفیسەکەم هەڵگرت. لێرە وەڵامت دەدەنەوە. | needs native review |
+| `intakeLimits.sizePassed` | I can't make a design at {size} myself, so I've passed your message to the office. They'll find a size that works and follow up with you here. | خۆم ناتوانم دیزاینێک بە قەبارەی {size} دروست بکەم، بۆیە پەیامەکەتم گەیاندە ئۆفیسەکە. قەبارەیەکی گونجاو دەدۆزنەوە و لێرە وەڵامت دەدەنەوە. | needs native review |
+| `intakeLimits.sizeKept` | I can't make a design at {size} myself, so I've kept your message for the office. They'll find a size that works and follow up with you here. | خۆم ناتوانم دیزاینێک بە قەبارەی {size} دروست بکەم، بۆیە پەیامەکەتم بۆ ئۆفیسەکە هەڵگرت. قەبارەیەکی گونجاو دەدۆزنەوە و لێرە وەڵامت دەدەنەوە. | needs native review |
 
-187 lines.
+272 lines.

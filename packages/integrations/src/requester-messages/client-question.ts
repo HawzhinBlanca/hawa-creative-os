@@ -68,4 +68,31 @@ export const CLIENT_QUESTION_MESSAGES = {
     en: "I haven't heard who this design is for, so I've passed it to the office; they'll pick the organisation. A designer will make {title} and send it to you here.",
     ckb: 'نەمزانی ئەم دیزاینە بۆ کێیە، بۆیە ناردم بۆ ئۆفیسەکە؛ ئەوان دامەزراوەکە هەڵدەبژێرن. دیزاینەرێک {title} دروست دەکات و لێرە بۆت دەنێرێت.',
   },
+  // Conversation fuzz (2026-10-03): words sent while the brief waits for the answer. A change or a deadline is kept with
+  // the brief (it opens with them) and the question is asked again; a bare organisation name with nothing open is asked
+  // what to design for it. Each Sorani line joins phrases already in this catalogue (`changeAddedWhileDesigning`,
+  // `deadlinePassed`, `whatToDesign`), listed in SORANI_REVIEW.md. `{question}` is the question as it was asked.
+  /** A change while the brief waits: kept with it. `{title}` bold. */
+  changeKeptAsk: {
+    en: "Got it. I've kept that with {title}. {question}",
+    ckb: 'تێگەیشتم. ئەوەم لەگەڵ {title} هەڵگرت. {question}',
+  },
+  /**
+   * A deadline while the brief waits, said back (`{when}`: "by tomorrow", the requester's own English words). Sent in
+   * English only: a Sorani deadline is answered with `deadlineKeptAsk`.
+   */
+  deadlineKeptAskWhen: {
+    en: 'Noted — {when}. {question}',
+    ckb: 'تێبینی کرا — {when}. ئەوەم لەگەڵ دیزاینەکە هەڵگرت. {question}',
+  },
+  /** A deadline while the brief waits, with no words to say back ("it's urgent"). `{title}` bold. */
+  deadlineKeptAsk: {
+    en: "Noted. I've kept the timing with {title}. {question}",
+    ckb: 'تێبینی کرا. ئەوەم لەگەڵ {title} هەڵگرت. {question}',
+  },
+  /** A bare organisation name with nothing open. `{client}` bold, the name as sent. */
+  whatToDesignFor: {
+    en: 'What would you like designed for {client}? Tell me in your own words, with the text that should go on it.',
+    ckb: 'چیت دەوێت بۆ {client} دیزاین بکرێت؟ بە وشەی خۆت پێم بڵێ، لەگەڵ ئەو دەقەی دەبێت لەسەری بێت.',
+  },
 } as const satisfies PhraseBook;

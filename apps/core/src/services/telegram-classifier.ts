@@ -153,6 +153,10 @@ const ACKNOWLEDGEMENT_PHRASES = [
   'سوپاس', 'زۆر سوپاس', 'سوپاس بۆ تۆ', 'سوپاست دەکەم', 'زۆر سوپاست دەکەم', 'سپاس', 'مەمنون', 'باشە', 'زۆر باشە',
   'دەستت خۆش', 'دەستت خۆش بێت', 'دەستخۆش', 'دەستخۆشی', 'ناوازەیە', 'جوانە', 'زۆر جوانە',
   'شکرا', 'شكرا', 'شکراً', 'شكراً',
+  // Conversation fuzz (2026-10-03, J5): a closing wish was asked "Is this a change to …, or a new design?"; "not bad" is
+  // praise; Arabic "thank you very much" (needs native review) was answered as chat.
+  'have a nice day', 'have a good day', 'have a great day', 'have a nice weekend', 'have a good weekend', 'not bad',
+  'شكرا جزيلا', 'شكراً جزيلاً', 'شکرا جزیلا',
 ];
 
 /**
@@ -199,6 +203,38 @@ const withoutModifiers = (text: string) => text.replace(/[\u{1F3FB}-\u{1F3FF}\uF
 export function isNegativeReaction(text: string): boolean {
   const t = withoutModifiers(text);
   return t.length > 0 && t.length <= 60 && ONLY_EMOJI.test(t) && NEGATIVE_EMOJI.test(t);
+}
+
+/**
+ * Conversation fuzz (2026-10-03, J6/J1): words that only say the requester is not happy with the design, and name
+ * nothing to change ("I don't like it", "it's ugly", "looks cheap", "not quite", "hmm not what I expected", "meh",
+ * "too busy"; Sorani "the design is ugly"). They were asked "Is this a change to …, or a new design?" (the heuristics
+ * read them as a short brief), answered with the design's status, or kept as a change that a paid round would then
+ * apply to the words "looks cheap". They are what an unhappy emoji is (ADR-252): the office hears them and the
+ * requester is asked what to change. A clause that names a part or asks for something ("remove the gold, it looks
+ * cheap", "the colours are awful") is a change, as before; a refusal ("not approved", "it's not good") stays one too.
+ */
+const UNHAPPY_LEAD = '(?:(?:hmm+|hm+|um+|uh+|well|honestly|sorry|but|oh|ugh|ah+|so|tbh|actually|no|nope|mm+)[\\s,.!…]+)*';
+const UNHAPPY_DEGREE = '(?:(?:so|very|really|quite|a\\s+bit|a\\s+little|kind\\s+of|kinda|too|pretty|rather)\\s+)?';
+const UNHAPPY_WORD = '(?:ugly|terrible|awful|horrible|boring|cheap|plain|amateur(?:ish)?|unprofessional|weird|dull|meh|busy|cluttered|messy|bland)';
+/** Said alone: only words that cannot mean anything else ("busy" alone may be the requester; "plain" may be asked for). */
+const UNHAPPY_ALONE = `(?:${UNHAPPY_DEGREE}(?:ugly|terrible|awful|horrible|boring|cheap|meh|cluttered|messy|amateurish|unprofessional)|(?:too|so|very|really|a\\s+bit)\\s+(?:busy|plain|dull|bland))`;
+const THE_DESIGN = '(?:it|this|that|this\\s+one|that\\s+one|the\\s+(?:design|poster|draft|flyer|banner|result|new\\s+one|new\\s+version))';
+const UNHAPPY_EN = new RegExp(`^${UNHAPPY_LEAD}(?:` + [
+  `(?:i|we)\\s+(?:really\\s+)?(?:don'?t|do\\s+not|didn'?t|did\\s+not)\\s+(?:really\\s+)?(?:like|love)\\s+${THE_DESIGN}(?:\\s+(?:at\\s+all|much|very\\s+much|that\\s+much))?`,
+  `(?:i'?m|we'?re|i\\s+am|we\\s+are)\\s+not\\s+(?:really\\s+)?(?:happy|satisfied|convinced|impressed|sure\\s+about)(?:\\s+(?:with|about)\\s+${THE_DESIGN})?`,
+  `(?:${THE_DESIGN}\\s+)?(?:looks|seems|feels)\\s+${UNHAPPY_DEGREE}(?:${UNHAPPY_WORD}|off)`,
+  `(?:${THE_DESIGN}\\s*(?:'s|’s|\\s+is)|it'?s|that'?s)\\s+${UNHAPPY_DEGREE}${UNHAPPY_WORD}`,
+  UNHAPPY_ALONE,
+  `not\\s+(?:quite|really|great|nice|it|(?:quite\\s+)?right|(?:quite\\s+)?what\\s+(?:i|we)\\s+(?:expected|wanted|asked\\s+for|had\\s+in\\s+mind))`,
+  `(?:that'?s\\s+|it'?s\\s+)?not\\s+what\\s+(?:i|we)\\s+(?:expected|wanted|asked\\s+for|had\\s+in\\s+mind)`,
+  'not\\s+(?:a\\s+)?(?:big\\s+)?fan(?:\\s+of\\s+(?:it|this|that))?',
+].join('|') + ')(?:[\\s,.!…]+(?:sorry|tbh|honestly|to\\s+be\\s+honest|at\\s+all|really))*[\\s.!…?🙁😕😐]*$', 'iu');
+/** Sorani, from the repository's own lines: "the design is ugly" (requester-intake-hunt3). Needs native review. */
+const UNHAPPY_CKB = /^(?:(?:دیزاینەکە|پۆستەرەکە|ئەمە|ئەوە)\s+)?ناشیرینە[\s.!]*$/u;
+export function isUnhappyOpinion(text: string): boolean {
+  const t = withoutModifiers(text).replace(/\s+/g, ' ');
+  return t.length > 0 && t.length <= 80 && (UNHAPPY_EN.test(t) || UNHAPPY_CKB.test(t));
 }
 
 /**
@@ -337,7 +373,8 @@ export function classifyWithHeuristics(
   // ADR-252: "👎", "😡" say the requester is not happy. They are never thanks, and never a change by
   // themselves (one replying to a design waiting for changes would start a paid round on "👎"): the
   // chat answer passes them to the office (lifecycle-chat-answers.ts).
-  if (isNegativeReaction(trimmed)) {
+  // Conversation fuzz (2026-10-03): so are words that only say they are not happy ("I don't like it", "looks cheap").
+  if (isNegativeReaction(trimmed) || isUnhappyOpinion(trimmed)) {
     return { kind: 'other', intent: 'question_or_other', confidence: 0.9, isInstructionOnly: false,
       reason: NEGATIVE_REACTION_REASON, documentKind };
   }

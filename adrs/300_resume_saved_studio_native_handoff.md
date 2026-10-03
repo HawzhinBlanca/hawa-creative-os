@@ -1,4 +1,6 @@
-# ADR293 — Resume the saved Studio source after a native handoff refusal
+# ADR300 — Resume the saved Studio source after a native handoff refusal
+
+**Owner:** codex
 
 Date: 2026-10-03. Status: accepted; targeted qualification passed; not deployed.
 Requirements: FR-028/029/038/041, NFR-018/024/025.
@@ -39,3 +41,10 @@ model transport calls. Keep the original failed cases and broader affected
 orchestrator/QA tests. These are deterministic integration fixtures, not an
 actual newly uploaded Canva design or customer approval/download proof.
 Evidence: plans/hawzhin-app-integration-2026-10-02/CRIMSON_NATIVE_FONT_PROOF.json.
+
+## Number reconciliation
+
+Originally recorded as ADR293 on source559fda76. Renumbered to ADR300 when
+merging live5f3aec67, which already contains Claude’s independent ADR293.
+The decision and runtime behaviour are unchanged. Historical font/handoff
+qualification is preserved at its recorded source revision.

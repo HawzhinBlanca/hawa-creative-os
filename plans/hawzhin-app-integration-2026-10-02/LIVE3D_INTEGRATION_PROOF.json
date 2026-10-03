@@ -1,0 +1,243 @@
+{
+  "date": "2026-10-03",
+  "status": "LIVE3D_MERGED_SOURCE_TARGETED_QUALIFICATION_PASSED_UNRELEASED",
+  "requirements": [
+    "FR-004",
+    "FR-005",
+    "FR-013",
+    "FR-028",
+    "FR-029",
+    "FR-038",
+    "FR-041",
+    "FR-070",
+    "NFR-006",
+    "NFR-012",
+    "NFR-018",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "sourceBasis": {
+    "previousEngine": "c595699a1331668fabf851e0bb1f6e1834da979c",
+    "mergedLiveRelease": "5f3aec6767efd6fd3fc23c7016806913ebc463d6",
+    "websiteUnchanged": "ec8f541",
+    "observedProductionRevision": "5f3aec6767efd6fd3fc23c7016806913ebc463d6"
+  },
+  "changes": [
+    "Preserve latest live clarification/cancellation/deadline/visual-complaint intake behaviour in the customer candidate.",
+    "Retain customer boundary/photo manifest/display policy/native source handoff; no migration/dependency change.",
+    "Preserve both traceability histories; regenerate release seal after source commit.",
+    "Renumber Codex handoff ADR293 to300; retain Claude numbering ADR293; accept owner number blocks."
+  ],
+  "qualification": {
+    "affectedFiles": 23,
+    "passed": 930,
+    "failed": 0,
+    "skipped": 0,
+    "durationSeconds": 90.21,
+    "typecheck": "PASS:819/819 active roots plus workspace/scripts",
+    "lint": "PASS: includes egress/numbering",
+    "initialRun": {
+      "passed": 919,
+      "failed": 11,
+      "preserved": true,
+      "reason": "Tests loaded pre-merge compiled requester catalogue before concurrent rebuild finished. Three new intake files failed; fresh import then confirms new phrases and rebuilt affected suite passes."
+    },
+    "scope": "Real mounted Core/PostgreSQL integration plus deterministic policy/orchestrator/numbering checks; external calls and staff synthetic; not full current regression/customer/native/hosted admission."
+  },
+  "separateRecoveryEvidence": {
+    "sourceCommit": "c595699a1331668fabf851e0bb1f6e1834da979c",
+    "runtimeSourceChanges": 0,
+    "scenario": "R1.S3.SOURCES --candidate --recovery --poller worker",
+    "passed": 243,
+    "failed": 0,
+    "scenarioDurationSeconds": 119.062,
+    "totalTestCommandSeconds": 185.31,
+    "drillCount": 2,
+    "tables": 115,
+    "policies": 604,
+    "registeredBlobs": 16,
+    "preexistingContainersUnchanged": 9,
+    "ownedResourcesRemaining": 0,
+    "scope": "Actual same-host production-stack PostgreSQL/Restate/blob archives and two fresh-volume restores/journal/effect reconciliation; external services/staff synthetic.",
+    "limitations": [
+      "Pre-merge basis; does not qualify merged source automatically.",
+      "Separate clean host, production continuous RPO/offsite protection/customer/native journey unqualified."
+    ]
+  },
+  "historicalEvidence": {
+    "fontAndHandoff": "CRIMSON_NATIVE_FONT_PROOF.json keeps originalsource559fda76/original ADR293 path/hashes. Current document adrs/300_resume_saved_studio_native_handoff.md; historical record not rewritten."
+  },
+  "sourceHashes": [
+    {
+      "path": "apps/core/src/routes/lifecycle-internal.routes.ts",
+      "sha256": "ef5579661c3f2de8c5405bb37768132839fc23a80a5e2935db04995fae6c2b27"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "b265feab2e76ca21c0bd6ccdceb004551b05777bf53a23b259947d65ada86a9f"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-chat-answers.ts",
+      "sha256": "e724d94b96e42167bcb9c2726064bdb2e4164c16d332b28aa662b646fca61edf"
+    },
+    {
+      "path": "apps/core/src/services/lifecycle-client-question.ts",
+      "sha256": "fc77e5d28f26a18a2aac5dfe28ec7014dc8f9da86de386a45d4665a133559cef"
+    },
+    {
+      "path": "apps/core/src/services/requester-turn.ts",
+      "sha256": "86ab79cdbd91cfaee74bd52f4daaf2f6d03836c3d0172c2704a8a6545b5f606b"
+    },
+    {
+      "path": "apps/core/src/services/telegram-classifier.ts",
+      "sha256": "7ef5140972622b4ad7200439a8b103cbb4d10ec2cd3c848bee22e9fc7e54d405"
+    },
+    {
+      "path": "apps/core/test/canary-friction-2026-10-03.test.ts",
+      "sha256": "41948f162421b37a5c6866bef99bf113f89b0b8e0c0a7c51b3f041d00b8ce8a1"
+    },
+    {
+      "path": "apps/core/test/conversation-fuzz-2.test.ts",
+      "sha256": "b38d8013e99639d2d6cdad92207b9f74a72506650680ba55c79be941d46ecae5"
+    },
+    {
+      "path": "apps/core/test/conversation-fuzz-3.test.ts",
+      "sha256": "aaf46b1d95b3cd0b9f50ccc4ff197ef0911cb5516253a66bba1647ee99423d27"
+    },
+    {
+      "path": "apps/core/test/conversation-fuzz-4.test.ts",
+      "sha256": "0cc6bee3ed577c44e8dc04daa34dc51519c8b4403441fcc67686646fa0fcaebb"
+    },
+    {
+      "path": "apps/core/test/conversation-fuzz-classes.test.ts",
+      "sha256": "0fec5857fd774cac20b8bcbaec43d2a825508c504810ee032b941398c725cdd5"
+    },
+    {
+      "path": "apps/core/test/conversation-fuzz.test.ts",
+      "sha256": "b0237450935f135f4fb08fd33d56175ffeddeda14b6dc7d14dd0707ef1a39838"
+    },
+    {
+      "path": "apps/core/test/fixtures/conversation-fuzz.ts",
+      "sha256": "e5b3988e3879c6214028379bd2bb895baf164e92b07be65c913cda6b7908be19"
+    },
+    {
+      "path": "apps/core/test/fixtures/nl-scripts/changes.ts",
+      "sha256": "8521edfdfa3b787c8a82660cbfca628577a9ec814628bd90db7ff6b6bffa426c"
+    },
+    {
+      "path": "apps/core/test/fixtures/nl-scripts/conversation.ts",
+      "sha256": "4c3f9f64e2734f23a1988dccbe18030aa3e22ec956a1fc2a9fac8655a941365b"
+    },
+    {
+      "path": "apps/core/test/lifecycle-internal-intake.test.ts",
+      "sha256": "5b8ddf54e7f597815ba4d3fd828e8b62d94166e415374e234de6e4a80a875ea0"
+    },
+    {
+      "path": "apps/core/test/natural-language-friction-audit.test.ts",
+      "sha256": "3bc4e30a0140faf20e53e183756b7e18961570f5c077cbc0158a970802adc190"
+    },
+    {
+      "path": "apps/core/test/office-telegram-approval.test.ts",
+      "sha256": "119c2cf3e499adf94bc3c065b256f3f97319cd3cb1c3304661674c3dc9e911be"
+    },
+    {
+      "path": "apps/core/test/request-withdraw.test.ts",
+      "sha256": "b9ebdcf1c886128c50029975f16a3a6ac392ae0ffb8c5f5a736902dc1f7c4a21"
+    },
+    {
+      "path": "apps/core/test/requester-cancel-several.test.ts",
+      "sha256": "5545db1cb886ce02a53659b1306e598bf371ef7dcbb82e16b2f5365bf1bb5b4e"
+    },
+    {
+      "path": "apps/core/test/requester-intake-hunt3.test.ts",
+      "sha256": "4cfbdf841474ad9b54c0ee1ca4581c820ca5904600ca077661ebe7f7c3a22ffa"
+    },
+    {
+      "path": "apps/core/test/requester-intent-routing.test.ts",
+      "sha256": "13d2e6ea422f41b1210161bfe1a23e900805aeed136d407f0c220c61bc15e02b"
+    },
+    {
+      "path": "apps/core/test/requester-turn-confirmations.test.ts",
+      "sha256": "2bcf2af7c6323b426f8b6267f3558db169bee04b8c94e15a6fcb7ebfde7d14ef"
+    },
+    {
+      "path": "apps/core/test/requester-turn-nlu-eval-fixes.test.ts",
+      "sha256": "3c88bf1f76786c1466b24818d58d3a24b8f0e72738d3730a5c3b68ddff7d80d1"
+    },
+    {
+      "path": "packages/db/src/migration-files.ts",
+      "sha256": "dc9f489698da822887a9cb296eb4ead3dbf1c87c060120946cad57ef15900c54"
+    },
+    {
+      "path": "packages/db/src/upgrade.ts",
+      "sha256": "bf5ff1330ad4f7fd6686049e5d667a3e92a0ab1ccddba881efb5177d0efaa907"
+    },
+    {
+      "path": "packages/integrations/src/requester-messages/client-question.ts",
+      "sha256": "ec2efbd16d653e09789dae76af4cf5d0de3d2473ce485bf0f611cc883c2a2ef4"
+    },
+    {
+      "path": "scripts/check_numbers.ts",
+      "sha256": "b1ea9ebd0cd9b97101b12f56cd989698fa38e21e7cb3dbe8ca7b9206c4a30b27"
+    },
+    {
+      "path": "scripts/next_number.ts",
+      "sha256": "689faed5057063cc0feb5664cc49deabf19fd1c5dcaa69a6d62ee335940f12d0"
+    },
+    {
+      "path": "scripts/numbering_lib.ts",
+      "sha256": "9bd5b0481dc3cf9a0736793728a0ba3194e3e1f863ed6ca5f2fabfa0873c6482"
+    },
+    {
+      "path": "scripts/test/numbering.test.ts",
+      "sha256": "18d67761650a4b664b5afb886d391506eefbf768c441b999f6d2e1243d2e043b"
+    }
+  ],
+  "reportHashes": [
+    {
+      "path": "output/qualification/2026-10-03-live3d-integration/affected.log",
+      "sha256": "070ffe2562b2ea5cabf3a967f8696ca3fef442245f7abf48627959953c7f5d7f"
+    },
+    {
+      "path": "output/qualification/2026-10-03-live3d-integration/affected-built.log",
+      "sha256": "994be519cc18075b460bb34485aaa5a264eda611583a031a8008ce83c1299cba"
+    },
+    {
+      "path": "output/qualification/2026-10-03-live3d-integration/types.log",
+      "sha256": "38ff3fa3ad0234bfa215a88bee5a2b32a02da5e4ce79096f76127bcf0188805c"
+    },
+    {
+      "path": "output/qualification/2026-10-03-live3d-integration/lint.log",
+      "sha256": "249903b8d77b696f2585f8a3fd60de2ecee6642076fe5e487446ef69bc962fed"
+    },
+    {
+      "path": "output/qualification/2026-10-03-current-recovery/run.log",
+      "sha256": "3f83d9eb9f12073aca370d4f906433090e6553de90365d5f46270d771497d125"
+    },
+    {
+      "path": "output/qualification/2026-10-03-current-recovery/last-run.json",
+      "sha256": "4b55dc93b057749902a443a026f8691f34370c01b600979d82ce4139332d5585"
+    },
+    {
+      "path": "output/qualification/2026-10-03-current-recovery/recovery-drive.json",
+      "sha256": "04d52008c75045a96dc239a7462317d747ae52e0f563fbc637107acf96b77061"
+    },
+    {
+      "path": "output/qualification/2026-10-03-current-recovery/recovery-telegram.json",
+      "sha256": "e4379a9b0c407af77ea18b85153af99f0cdfb78252a384d4cbe0ceb3bbd34bb1"
+    },
+    {
+      "path": "output/qualification/2026-10-03-current-recovery/cleanup.json",
+      "sha256": "e23ddfef4c8bd8e6fc8ead363c42844b4ab7b5982b52742ac83adea35adced5d"
+    },
+    {
+      "path": "output/qualification/2026-10-03-current-recovery/preexisting-containers.json",
+      "sha256": "0eb0a7b157599842f0f32f5fb3ce0fda124151c3133852ad11769b93d4d87657"
+    }
+  ],
+  "releaseLimits": [
+    "No production deploy/push/DNS/tunnel/hosting purchase/public activation.",
+    "Full current preflight/remoteCI/coverage/customer-native acceptance/real-client visual-language signoff/hosted recovery/cutover open.",
+    "Specific new-file Canva upload and hosting answers pending."
+  ]
+}

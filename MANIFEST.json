@@ -3,14 +3,14 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T16:10:21Z",
+  "generatedAt": "2026-10-03T18:43:29Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
     "SHA256SUMS.txt (self-reference)",
     "VALIDATION_REPORT.md (final validation record, covered by SHA256SUMS.txt)"
   ],
-  "fileCount": 954,
+  "fileCount": 962,
   "files": [
     {
       "path": ".dockerignore",
@@ -29,8 +29,8 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "25648b0beb1801e5d2d1796cdbb8e9faaf5ed372ccc309f9dd474cffad9266bb",
-      "bytes": 7814
+      "sha256": "cbf4d3aa0e247b4388f726b95e09ab67e0a4ff66b70132539df2fda6f5c5a808",
+      "bytes": 7841
     },
     {
       "path": "AGENTS.md",
@@ -1339,8 +1339,8 @@
     },
     {
       "path": "adrs/284_requester_intake_hunt3.md",
-      "sha256": "29734bd298726e4ee13ac771908217cfbdd11535f6e09765c573a59022e195e3",
-      "bytes": 41731
+      "sha256": "c39b3f8fb6ff327f85a1e5b9f5f619528271d1f67a452743c6411b3a2040a1f3",
+      "bytes": 55043
     },
     {
       "path": "adrs/285_office_boundaries_after_bug_hunt_3.md",
@@ -1383,9 +1383,19 @@
       "bytes": 4396
     },
     {
-      "path": "adrs/293_resume_saved_studio_native_handoff.md",
-      "sha256": "eb8db915a22234ab3b12ad1360c64d9640ea34751f67f42cffbd946c371b48a0",
-      "bytes": 2325
+      "path": "adrs/293_numbers_taken_across_branches_and_worktrees.md",
+      "sha256": "06ef08b8b022e9704dba642a823cac338fc7bafea83ff1b0ca36610090db0cce",
+      "bytes": 6174
+    },
+    {
+      "path": "adrs/300_resume_saved_studio_native_handoff.md",
+      "sha256": "29480b52124f96d9c28ca59c0fcd4c2942cbaebd3cf86a6e79397dd12c08cc44",
+      "bytes": 2655
+    },
+    {
+      "path": "adrs/NUMBER_BLOCKS.json",
+      "sha256": "8b00ae768fb7a9b469eaf0ae19773a6d16b89f0f4bff2d9e002fa76ef6107c4b",
+      "bytes": 3423
     },
     {
       "path": "api/canva-connect.openapi.json",
@@ -1766,6 +1776,11 @@
       "path": "docs/30_FUTURE_EVOLUTION.md",
       "sha256": "4d39b5e6d71483dc5330d59ce223516524ad217c4c6b000221616b6c796b74cd",
       "bytes": 2604
+    },
+    {
+      "path": "docs/NUMBERING.md",
+      "sha256": "23a34ea71a46b6073481ccd0202a5a827e979ee467e8cec8ba9a5e5a459d5968",
+      "bytes": 3752
     },
     {
       "path": "docs/RUNBOOK_STRANDED_CANVA_RECOVERY.md",
@@ -2443,6 +2458,11 @@
       "bytes": 16078
     },
     {
+      "path": "plans/hawzhin-app-integration-2026-10-02/LIVE3D_INTEGRATION_PROOF.json",
+      "sha256": "a05017bf6fc2e46fd7b93076ca3fc71d1dec0217b388005d6fa17a6343291cbc",
+      "bytes": 9949
+    },
+    {
       "path": "plans/hawzhin-app-integration-2026-10-02/LIVE_CLIENT_GENERATION_PROOF.json",
       "sha256": "62e09ce46846af5496a84da2d5eace25e0ab29132d25c50f78791c997c38864e",
       "bytes": 7772
@@ -2474,8 +2494,8 @@
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/PLAN.md",
-      "sha256": "7722885e813486c83738a061607d482cc31ac97fca10f9c614e6a4729cb10e3d",
-      "bytes": 34285
+      "sha256": "fa6c97c94fc8c119dddcc565369fe7d35b9a73130a04cae8b43b58b58b7f0e5e",
+      "bytes": 35470
     },
     {
       "path": "plans/hawzhin-app-integration-2026-10-02/STANDARD_CUSTOMER_STORY_PROOF.json",
@@ -2789,8 +2809,8 @@
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/SORANI_REVIEW.md",
-      "sha256": "8ba96c230c77f6e7922bdf584427137294ac8691b21a03fffb7a61f8dacf668d",
-      "bytes": 81249
+      "sha256": "e6ba946c20aea180a27d03670f6697a005f68569410e0df1035bfb274e23359f",
+      "bytes": 76874
     },
     {
       "path": "plans/lean-design-implementation-2026-09-28/STUDIO_V2_INTEGRATION_PROOF.json",
@@ -3239,8 +3259,8 @@
     },
     {
       "path": "plans/nlu-eval-2026-10-02/BASELINE.json",
-      "sha256": "2edbab16a0118e86322abe0bbdff298f9e55a611ee9aea1f9fd6160f4da69228",
-      "bytes": 50298
+      "sha256": "55f34a56a52b9b59b9cf6c4e15694f94d530084dc65cdf91e69559bdf4637c09",
+      "bytes": 50380
     },
     {
       "path": "plans/nlu-eval-2026-10-02/MODEL_FIRST_RESULTS.md",
@@ -3769,8 +3789,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "d8aaa4d328a6bfaa5941238ae019f4bd23cb33ff91caccb2e019ddbfbfc888eb",
-      "bytes": 951045
+      "sha256": "f1e0c9abd28556528e3d0d1bfb6e39448a0c92941780aae17bcbd5045de7493a",
+      "bytes": 958408
     },
     {
       "path": "plans/user-stories.csv",
@@ -4058,6 +4078,11 @@
       "bytes": 4150
     },
     {
+      "path": "scripts/check_numbers.ts",
+      "sha256": "b1ea9ebd0cd9b97101b12f56cd989698fa38e21e7cb3dbe8ca7b9206c4a30b27",
+      "bytes": 1591
+    },
+    {
       "path": "scripts/check_office_access.ts",
       "sha256": "63367586bd021162c7a101114d3177b4fa8017528237a4f7e4f82f3efc4a9583",
       "bytes": 1238
@@ -4336,6 +4361,16 @@
       "path": "scripts/measure_operations_slo.ts",
       "sha256": "3c2bdb4b02362a5109cfa29b18e664b383a1e58678efeb85435271dd9fe8595c",
       "bytes": 16912
+    },
+    {
+      "path": "scripts/next_number.ts",
+      "sha256": "689faed5057063cc0feb5664cc49deabf19fd1c5dcaa69a6d62ee335940f12d0",
+      "bytes": 3318
+    },
+    {
+      "path": "scripts/numbering_lib.ts",
+      "sha256": "9bd5b0481dc3cf9a0736793728a0ba3194e3e1f863ed6ca5f2fabfa0873c6482",
+      "bytes": 16088
     },
     {
       "path": "scripts/office_photo_library_ingest.ts",
@@ -4666,6 +4701,11 @@
       "path": "scripts/test/nginx-reload.test.ts",
       "sha256": "8c2f8fe1460a62c9325376f523b40b9c65c1612fb84a8fc1552f06325c734fed",
       "bytes": 3500
+    },
+    {
+      "path": "scripts/test/numbering.test.ts",
+      "sha256": "18d67761650a4b664b5afb886d391506eefbf768c441b999f6d2e1243d2e043b",
+      "bytes": 9774
     },
     {
       "path": "scripts/test/provider-credential-update.test.ts",

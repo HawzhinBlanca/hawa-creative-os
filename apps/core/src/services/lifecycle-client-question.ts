@@ -60,7 +60,8 @@ export interface ClientQuestion {
   sourceUpdate?: unknown;
 }
 
-export type ClientAnswerOutcome = 'client' | 'office' | 'unmatched' | 'expired' | 'timeout';
+/** `withdrawn` (conversation fuzz, 2026-10-03): the requester cancelled the kept brief, asked first; it never opens. */
+export type ClientAnswerOutcome = 'client' | 'office' | 'unmatched' | 'expired' | 'timeout' | 'withdrawn';
 export interface ClientResolution { byUpdateId: number; outcome: ClientAnswerOutcome; clientId?: string }
 
 async function readRow<T>(trx: Tx, tenantId: string, kind: string, id: string): Promise<T | null> {
@@ -119,7 +120,10 @@ export async function answeredUpdateOf(trx: Tx, tenantId: string, replyMessageId
 }
 
 /** "I don't know", "not sure", "just make it", in English or Sorani: the office chooses. */
-const DONT_KNOW = /^(?:(?:i|we)\s+)?(?:(?:don'?t|do\s+not|dont)\s+know|not\s+sure|no\s+idea|no\s+clue|unsure)\b|^(?:just\s+(?:make|do|design)\s+it|(?:it\s+)?doesn'?t\s+matter|whatever|any(?:one)?|skip\s+it)\b|نازانم|نازانین|دڵنیا\s*نیم|گرنگ\s+نییە|(?:تەنها|هەر)\s+دروستی\s+بکە/iu;
+// Conversation fuzz (2026-10-03): "any update?" and "any news on the poster?" began with "any", were read as "anyone"
+// (the office chooses), and opened the kept brief for the office. "Any" answers alone; "anyone", "whatever" as before,
+// but never before "update", "news" or "progress".
+const DONT_KNOW = /^(?:(?:i|we)\s+)?(?:(?:don'?t|do\s+not|dont)\s+know|not\s+sure|no\s+idea|no\s+clue|unsure)\b|^(?:just\s+(?:make|do|design)\s+it|(?:it\s+)?doesn'?t\s+matter|skip\s+it)\b|^(?:whatever|any\s*one)\b(?!\s+(?:update|news|progress|word|idea)s?\b)|^any[\s.!]*$|نازانم|نازانین|دڵنیا\s*نیم|گرنگ\s+نییە|(?:تەنها|هەر)\s+دروستی\s+بکە/iu;
 /** Words that ask for a design (a design noun, a date or a number): a brief, not an answer. */
 const NAMES_A_DESIGN = /\b(?:poster|flyer|banner|design|invitation|invite|card|post|story|brochure|certificate|announcement|graphic|cover|leaflet|thumbnail|advert)s?\b|پۆستەر|پۆست|دیزاین|بانگهێشت|\p{N}/iu;
 export const saysDontKnow = (text: string) => text.trim().split(/\s+/).length <= 8 && DONT_KNOW.test(text.trim());
@@ -234,4 +238,78 @@ export async function timedOutClientQuestion(trx: Tx, tenantId: string, scope: {
 export async function clientName(trx: Tx, tenantId: string, clientId: string): Promise<string | null> {
   return (await sql<{ name: string }>`SELECT name FROM hawa.clients WHERE tenant_id = ${tenantId}::uuid AND id::text = ${clientId}`
     .execute(trx)).rows[0]?.name ?? null;
+}
+
+// --- words kept with a waiting brief (conversation fuzz, 2026-10-03) ----------------------------------------
+
+/**
+ * A change ("make the title bigger") or a deadline ("need it by tomorrow") sent while the brief waits for the answer
+ * was passed to the office as words about a design "no longer open", or lost behind the question asked again. It is
+ * kept with the brief (one row per update, first write wins) and the brief opens with it, as a brief typed as several
+ * messages does (ADR-156): after the answer, the office's choice or the timeout.
+ */
+const NOTE = 'lifecycle_client_question_note';
+export interface ClientQuestionNote { briefUpdateId: number; updateId: number; kind: 'change' | 'deadline'; words: string }
+
+export async function keepClientQuestionNote(trx: Tx, tenantId: string, note: ClientQuestionNote): Promise<void> {
+  await insertRow(trx, tenantId, NOTE, `${note.briefUpdateId}:${note.updateId}`, note);
+}
+
+export async function clientQuestionNotes(trx: Tx, tenantId: string, briefUpdateId: number): Promise<ClientQuestionNote[]> {
+  return (await sql<{ payload: ClientQuestionNote }>`SELECT payload FROM hawa.inbox_events
+    WHERE tenant_id = ${tenantId}::uuid AND source_account_id = ${NOTE} AND payload->>'briefUpdateId' = ${String(briefUpdateId)}
+    ORDER BY (payload->>'updateId')::bigint LIMIT 20`.execute(trx)).rows.map((r) => r.payload);
+}
+
+/** The kept brief's words with the words kept with it after them. */
+export const withClientQuestionNotes = (words: string, notes: ClientQuestionNote[]): string =>
+  notes.reduce((all, note) => `${all}\n\n${note.words.trim()}`, words);
+
+/** "by tomorrow", "before Thursday", "today": the deadline said back in the requester's own English words. */
+const WHEN = /\b(?:(?:by|before|until|till|for)\s+)?(?:tomorrow(?:\s+(?:morning|afternoon|evening|night))?|today|tonight|(?:this|next)\s+(?:morning|afternoon|evening|week(?:end)?|month|(?:mon|tues|wednes|thurs|fri|satur|sun)day)|(?:mon|tues|wednes|thurs|fri|satur|sun)day|end\s+of\s+(?:the\s+)?(?:day|week|month))\b/i;
+export function deadlineWords(text: string): string | null {
+  const said = WHEN.exec(text)?.[0];
+  if (!said) return null;
+  return /^(?:by|before|until|till|for)\s/i.test(said) ? said.toLowerCase().replace(/^for\s/, 'by ') : `by ${said.toLowerCase()}`;
+}
+
+// --- a bare organisation name with nothing open (conversation fuzz, 2026-10-03) -----------------------------
+
+/** Words that make the message about a thing to make, not an organisation's name alone. */
+const NOT_A_NAME = /\b(?:logo|menu|sticker|video|reel|badge|label|sign(?:age)?|slide|deck|page|template|image|picture|photo|text|title|font|colou?r|size|make|need|want|create|send|please|pls|can|could|would|will|should|change|add|remove|put|use|help)s?\b|\?/iu;
+const NAMED = 'lifecycle_client_named';
+export interface NamedOrganisation { updateId: number; chatId: string; senderId: string; topicId: string; name: string; clientId: string | null; at: string }
+
+/**
+ * An organisation's name sent alone ("KAAE", "Erbil Chess Club", "it's for the Erbil Chess Club"): the name as said
+ * (without "it's for the"), and the client it names when the office works with it. Anything that asks for a design,
+ * a change or an answer is not one.
+ */
+export async function bareOrganisationName(trx: Tx, tenantId: string, chatId: string, text: string): Promise<{ name: string; clientId: string | null } | null> {
+  const t = text.trim().replace(/[.!]+$/u, '');
+  if (!t || SMALL_TALK.test(t) || NAMES_A_DESIGN.test(t) || NOT_A_NAME.test(t) || saysDontKnow(t) || !plainClientAnswer(t)) return null;
+  const name = t.replace(/^(?:it'?s|it\s+is|this\s+is|that'?s|that\s+is)\s+/iu, '').replace(/^(?:for|from)\s+/iu, '')
+    .replace(/^(?:the|our|my)\s+/iu, '').trim();
+  if (!name || name.split(/\s+/).length > 6) return null;
+  const clientId = await resolveSourceClient(trx, tenantId, { chatId, words: t });
+  if (clientId) return { name, clientId };
+  return namesUnknownOrganisation(t) ? { name, clientId: null } : null;
+}
+
+export async function recordNamedOrganisation(trx: Tx, tenantId: string, named: NamedOrganisation): Promise<void> {
+  await insertRow(trx, tenantId, NAMED, String(named.updateId), named);
+}
+
+/**
+ * The organisation the sender named alone in this chat within `CLIENT_QUESTION_MS` before this update: the brief that
+ * follows is for it, and its sender is never asked "who is this design for?" right after being asked what to design for it.
+ */
+export async function recentNamedOrganisation(trx: Tx, tenantId: string, scope: { chatId: string; senderId: string; topicId: string },
+  updateId: number): Promise<NamedOrganisation | null> {
+  return (await sql<{ payload: NamedOrganisation }>`SELECT payload FROM hawa.inbox_events
+    WHERE tenant_id = ${tenantId}::uuid AND source_account_id = ${NAMED}
+      AND payload->>'chatId' = ${scope.chatId} AND payload->>'senderId' = ${scope.senderId} AND payload->>'topicId' = ${scope.topicId}
+      AND (payload->>'updateId')::bigint < ${updateId}
+      AND received_at > now() - (${CLIENT_QUESTION_MS} * interval '1 millisecond')
+    ORDER BY (payload->>'updateId')::bigint DESC LIMIT 1`.execute(trx)).rows[0]?.payload ?? null;
 }

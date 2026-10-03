@@ -358,7 +358,7 @@ Actual authorized hero_storyboard native bytes expose a missing Crimson Pro Bold
 full-name alias. Pinned font metadata verifies it is the requested Crimson Pro
 family; exact native titles/fonts and all5 pictures/logo now pass. ADR209 adds
 only that measured name, retaining unknown-family and manual DNA refusals.
-ADR293 corrects native setup/connectivity/reconnect exceptions entering a
+ADR300 (originally ADR293) corrects native setup/connectivity/reconnect exceptions entering a
 second-design fallback: transfer now retains the source and uses the existing
 retry/operator path. Resumption preserves exact plan/hash/bytes/import key and
 makes no new model calls. Genuine red cases retained;163 affected checks, build,
@@ -370,3 +370,23 @@ and titles remain accessible read-only. A manually imported earlier design is
 not the new customer workflow; actual new preview/revise/accept/editable download,
 human multilingual/real-client quality and hosted release gates remain open.
 Specific new-file upload approval and hosting choice are still unanswered.
+
+
+## 2026-10-03 — Live3d integration and bounded recovery
+
+Actual Core/worker/Desk all reported live5f3aec67 healthy. Merge it into the
+unreleased customer candidate, preserving both evidence histories. ADR300 is
+the native-handoff ADR293 renumbered to avoid Claude numbering ADR293. Owner
+blocks300–399/270–299 then400–499 accepted; no new migration or dependency.
+
+Merged23files930/0/0,819 typed roots, workspace/scripts types/lint pass. First
+919/11 loaded pre-merge compiled catalogue before rebuild; retained, then all930
+rerun on rebuilt packages with zero unhandled errors. Separate exactc595699a
+recovery243/243:115tables/604policies/16blobs, two effect boundaries, nine existing
+containers unchanged and owned resources/private directories removed. External
+services/staff synthetic; pre-merge same-host evidence is not a customer or
+clean-host admission. Historical font/handoff proof retains its original basis.
+
+Full current preflight/remoteCI/coverage/native customer acceptance/real visual
+and language signoff/hosting/offsite recovery/cutover open. Upload/hosting
+answers pending. No live provider/deploy/push. LIVE3D_INTEGRATION_PROOF.json.

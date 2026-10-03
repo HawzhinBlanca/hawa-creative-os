@@ -115,6 +115,22 @@ const rows = (requestId: string, taskId: string) => withRlsContext(db, scope, as
 }));
 const requesterWithdraw = (requestId: string, update: number): WithdrawEvent =>
   ({ v: 1, kind: 'withdraw', eventId: `chatinbox:withdraw:${update}`, requestId, updateId: update });
+/** How a request whose title names nothing ("do a better design thats similar…") is named (ADR-230 addendum, L16). */
+const SENT = /the one you sent (?:just now|\d+ minutes ago|today at \d\d:\d\d) \(“do a better design thats similar…”\)/;
+/**
+ * ADR-284 addendum (conversation fuzz): every requester cancel asks first, "Do you want me to cancel …?", and
+ * withdraws nothing; only the answer withdraws. The cancel words are sent and the question checked; then the
+ * requester's "yes" (a later update in the same chat, from the same sender) is returned with intake's decision on it.
+ */
+async function cancelAndConfirm(chat: number, words: string, question: string | RegExp, yesWords = 'yes') {
+  const cancel = message(chat, words);
+  const asked = await intake(cancel);
+  expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true });
+  if (typeof question === 'string') expect(asked.chatAnswer.text).toBe(question);
+  else expect(asked.chatAnswer.text).toMatch(question);
+  const yes = message(chat, yesWords);
+  return { cancel, asked, yes, decided: await intake(yes) };
+}
 
 describe('a requester\'s cancel withdraws a request nothing has been approved for (ADR-230, L1)', () => {
   it.each([
@@ -123,16 +139,16 @@ describe('a requester\'s cancel withdraws a request nothing has been approved fo
     ['awaiting_answer', 2, true, 'waiting for the requester\'s answer'],
     ['in_review', 2, true, 'with the office for review'],
     ['manual', 3, true, 'sent back by the office for changes'],
-  ] as const)('%s (rev %s): closed at once, told plainly, the office told by name (%s)', async (stage, rev, auto, _why) => {
+  ] as const)('%s (rev %s): closed after the requester confirms, told plainly, the office told by name (%s)', async (stage, rev, auto, _why) => {
     const chat = chatId();
     const { requestId, taskId, state } = await seed(chat, stage, rev, 'do a better design thats similar to earlier ones', auto);
-    const cancel = message(chat, 'cancel the last request');
-    const decided = await intake(cancel);
-    // Intake decides and says nothing yet: the request object closes it, then tells.
-    expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId, requestStage: stage, intent: 'cancel' });
+    const { yes, decided } = await cancelAndConfirm(chat, 'cancel the last request',
+      new RegExp(`^Do you want me to cancel ${SENT.source}\\?$`));
+    // Intake decides on the "yes" and says nothing yet: the request object closes it, then tells.
+    expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId, requestStage: stage });
     expect(decided.chatAnswer).toBeUndefined();
     const object = requestObject(state);
-    const reply = await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, cancel.update_id));
+    const reply = await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, yes.update_id));
     expect(reply).toEqual({ accepted: true, requestId, taskId, stage: 'cancelled', rev: rev + 1, fromStage: stage });
     expect(await rows(requestId, taskId)).toEqual({ request: { rev: String(rev + 1), stage: 'cancelled' }, task: { state: 'cancelled' } });
     expect(object.state()).toMatchObject({ stage: 'cancelled', rev: rev + 1, withdrawal: { actor: 'requester', fromStage: stage } });
@@ -157,21 +173,20 @@ describe('a requester\'s cancel withdraws a request nothing has been approved fo
   it('is replay-safe: the same event sends the same keys and projects nothing twice; other content is refused', async () => {
     const chat = chatId();
     const { requestId, taskId, state } = await seed(chat, 'designing', 1);
-    const cancel = message(chat, 'cancel that');
-    await intake(cancel);
+    const { yes } = await cancelAndConfirm(chat, 'cancel that', 'Do you want me to cancel <b>KAAE members evening</b>?');
     const object = requestObject(state);
-    const first = await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, cancel.update_id));
+    const first = await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, yes.update_id));
     const keys = object.sent.map((m) => m.key);
     object.journal.clear();
-    const again = await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, cancel.update_id));
+    const again = await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, yes.update_id));
     expect(again).toEqual(first);
     expect(object.posts.filter((p) => p.endsWith('/withdraw'))).toHaveLength(1);
     expect(object.sent.map((m) => m.key)).toEqual([...keys, ...keys]);
-    // Intake answering the same update again gives the same decision.
-    expect(await intake(cancel)).toMatchObject({ lifecycleAction: 'withdraw', requestId });
+    // Intake answering the same confirming update again gives the same decision.
+    expect(await intake(yes)).toMatchObject({ lifecycleAction: 'withdraw', requestId });
     // A fresh object state (Restate lost nothing, Core has the receipt): the projection answers the same.
     const fresh = requestObject(state);
-    expect(await recordWithdraw(fresh.ctx, fresh.core, requesterWithdraw(requestId, cancel.update_id))).toEqual(first);
+    expect(await recordWithdraw(fresh.ctx, fresh.core, requesterWithdraw(requestId, yes.update_id))).toEqual(first);
     expect(await rows(requestId, taskId)).toEqual({ request: { rev: '2', stage: 'cancelled' }, task: { state: 'cancelled' } });
   });
 
@@ -206,10 +221,11 @@ describe('a requester\'s cancel withdraws a request nothing has been approved fo
   it('in Sorani, the requester hears it in Sorani', async () => {
     const chat = chatId();
     const { requestId, state } = await seed(chat, 'designing', 1);
-    const cancel = message(chat, 'نا، هەڵیبوەشێنەوە');
-    expect(await intake(cancel)).toMatchObject({ lifecycleAction: 'withdraw', requestId });
+    // "No, cancel it", asked in Sorani ("Do you want me to cancel …?"), and answered "yes" in Sorani.
+    const { yes, decided } = await cancelAndConfirm(chat, 'نا، هەڵیبوەشێنەوە', 'دەتەوێت <b>KAAE members evening</b> هەڵبوەشێنمەوە؟', 'بەڵێ');
+    expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId });
     const object = requestObject(state);
-    await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, cancel.update_id));
+    await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, yes.update_id));
     expect(object.sent.find((m) => m.chatId === String(chat))?.text).toBe('<b>KAAE members evening</b> هەڵوەشێنرایەوە. هیچی تر بۆی دروست ناکرێت.');
   });
 });
@@ -231,13 +247,13 @@ describe('approved, being delivered or delivered: too late to withdraw, and said
   it('a request approved between the decision and the withdraw: nothing closes, the cancel is kept, the requester told so', async () => {
     const chat = chatId();
     const { requestId, taskId, state } = await seed(chat, 'in_review', 2);
-    const cancel = message(chat, 'cancel it');
-    expect(await intake(cancel)).toMatchObject({ lifecycleAction: 'withdraw' });
+    const { yes, decided } = await cancelAndConfirm(chat, 'cancel it', 'Do you want me to cancel <b>KAAE members evening</b>?');
+    expect(decided).toMatchObject({ lifecycleAction: 'withdraw' });
     // The office approved it before the request object took the cancel.
     await withRlsContext(db, scope, (trx) => sql`UPDATE hawa.requests SET stage = 'approved', rev = 3
       WHERE request_id = ${requestId}::uuid`.execute(trx));
     const object = requestObject({ ...state, stage: 'approved', rev: 3 } as AutomaticLifecycleState);
-    expect(await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, cancel.update_id)))
+    expect(await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, yes.update_id)))
       .toEqual({ accepted: false, code: 'TOO_LATE', stage: 'approved' });
     expect(await rows(requestId, taskId)).toMatchObject({ request: { rev: '3', stage: 'approved' } });
     expect(object.state()).toMatchObject({ stage: 'approved', rev: 3 });
@@ -252,10 +268,9 @@ describe('a design already being made when its request was withdrawn (ADR-230)',
   it('finishes into nothing: no review, no draft alert to anyone, its report kept against the closed task, once', async () => {
     const chat = chatId();
     const { requestId, taskId, state } = await seed(chat, 'designing', 1);
-    const cancel = message(chat, 'cancel that');
-    await intake(cancel);
+    const { yes } = await cancelAndConfirm(chat, 'cancel that', 'Do you want me to cancel <b>KAAE members evening</b>?');
     const object = requestObject(state);
-    await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, cancel.update_id));
+    await recordWithdraw(object.ctx, object.core, requesterWithdraw(requestId, yes.update_id));
     const before = object.sent.length;
     const runId = `dr-${taskId}`;
     const finished = { v: 1 as const, eventId: `dr-finished:${runId}`, requestId, runId, round: 0, taskId,
@@ -418,13 +433,15 @@ describe('a natural cancel is read as one, and only withdrawable requests are it
     expect(await intake(yes)).toMatchObject({ lifecycleAction: 'withdraw', requestId: accidental.requestId });
   });
 
-  it('names a request for certain: withdrawn without a question, among two open ones', async () => {
+  it('names a request for certain among two open ones: asks about that one alone, withdrawn after the requester confirms', async () => {
     const chat = chatId();
-    await seed(chat, 'in_review', 2, 'KAAE staff football tournament');
+    const football = await seed(chat, 'in_review', 2, 'KAAE staff football tournament');
     const nawroz = await seed(chat, 'designing', 1, 'Nawroz poster');
     await seed(chat, 'delivered', 7, 'KAAE K-12 Pilot Study');
-    expect(await intake(message(chat, 'please cancel the Nawroz poster I sent this morning')))
-      .toMatchObject({ lifecycleAction: 'withdraw', requestId: nawroz.requestId });
+    const { decided } = await cancelAndConfirm(chat, 'please cancel the Nawroz poster I sent this morning',
+      'Do you want me to cancel <b>Nawroz poster</b>?');
+    expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId: nawroz.requestId });
+    expect((await rows(football.requestId, football.taskId)).request).toEqual({ rev: '2', stage: 'in_review' });
   });
 
   it('"the one I just sent" is the newest withdrawable one, asked about by name', async () => {
@@ -449,9 +466,14 @@ describe('a natural cancel is read as one, and only withdrawable requests are it
     const kaae = await seed(chat, 'delivered', 7, 'KAAE K-12 Pilot Study');
     const read = vi.fn(async (input: { requests: Array<{ requestId: string }> }) => ({ intent: 'cancel' as const, reason: 'fixture',
       source: 'model' as const, requestId: input.requests.find((r) => r.requestId === accidental.requestId)!.requestId, confidence: 0.9 }));
-    const answer = await intakeWith(message(chat, 'can you cancel my other request, it was a mistake'), { read });
+    const asked = await intakeWith(message(chat, 'can you cancel my other request, it was a mistake'), { read });
     expect(read).toHaveBeenCalledTimes(1);
+    // ADR-284 addendum: a model reading asks first too, naming the request it chose.
+    expect(asked).toMatchObject({ lifecycleAction: 'chat-answer', choiceRequired: true,
+      chatAnswer: { text: 'Do you want me to cancel <b>Graduation flyer</b>?' } });
+    const answer = await intakeWith(message(chat, 'yes'), { read });
     expect(answer).toMatchObject({ lifecycleAction: 'withdraw', requestId: accidental.requestId });
+    expect(read).toHaveBeenCalledTimes(1);
     expect(await withRlsContext(db, scope, (trx) => pendingLateChanges(trx, tenantId, kaae.requestId))).toHaveLength(0);
   });
 });
@@ -478,7 +500,7 @@ describe('a cancel with a reason, closed requests never offered, and requests na
       expect(readIntentByRules(words).intent).not.toBe('cancel');
     });
 
-  it('the live words withdraw "Teacher Appreciation Day" at once; nothing closed or delivered is offered', async () => {
+  it('the live words withdraw "Teacher Appreciation Day" after the requester confirms; nothing closed or delivered is offered', async () => {
     const chat = chatId();
     const old = await seed(chat, 'delivered', 7, 'KAAE: Here is the text and the photos:…');
     const accidental = await seed(chat, 'manual', 1, RAW, false);
@@ -486,11 +508,13 @@ describe('a cancel with a reason, closed requests never offered, and requests na
     await seed(chat, 'in_review', 4, 'KAAE K-12 Pilot Study…');
     const teacher = await seed(chat, 'manual', 1, 'Teacher Appreciation Day', false);
     expect(old.requestId).toBeTruthy();
-    expect(await intake(message(chat, LIVE_L17))).toMatchObject({ lifecycleAction: 'withdraw', requestId: teacher.requestId });
+    const { decided } = await cancelAndConfirm(chat, LIVE_L17, 'Do you want me to cancel <b>Teacher Appreciation Day</b>?');
+    expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId: teacher.requestId });
   });
 
-  // ADR-239 follow-up (canary, 2026-10-02): a named cancel with a trailing apology or reason withdraws at
-  // once, as "it was only a test" does; it was asked "Do you want me to cancel …?".
+  // ADR-239 follow-up (canary, 2026-10-02): a named cancel with a trailing apology or reason names the design,
+  // as "it was only a test" does. ADR-284 addendum (conversation fuzz): it is asked about by that name first, and
+  // the requester's "yes" withdraws it.
   it.each([
     ['cancel the Science Fair flyer, sorry, it was by mistake'],
     ['cancel the Science Fair flyer, it was by mistake'],
@@ -500,11 +524,11 @@ describe('a cancel with a reason, closed requests never offered, and requests na
     ['cancel the Science Fair flyer, wrong one, sorry'],
     ['cancel the Science Fair flyer, sorry'],
     ['cancel the Science Fair flyer. Sorry, I sent it by mistake'],
-  ])('"%s" names the design and withdraws it at once', async (words) => {
+  ])('"%s" names the design, and withdraws it after the requester confirms', async (words) => {
     const chat = chatId();
     await seed(chat, 'in_review', 4, 'KAAE K-12 Pilot Study…');
     const flyer = await seed(chat, 'designing', 1, 'Science Fair flyer');
-    const decided = await intake(message(chat, words));
+    const { decided } = await cancelAndConfirm(chat, words, 'Do you want me to cancel <b>Science Fair flyer</b>?');
     expect(decided).toMatchObject({ lifecycleAction: 'withdraw', requestId: flyer.requestId });
     expect(decided.chatAnswer).toBeUndefined();
   });

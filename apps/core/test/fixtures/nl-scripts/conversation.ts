@@ -279,10 +279,14 @@ export const CONVERSATION_SCRIPTS: Script[] = [
   {
     id: 'S080', title: '"cancel that" while it is being made', kinds: ['cancel'],
     // ADR-230: it was a note for the office ("I've asked the office to cancel …") that closed nothing.
-    natural: 'The request is withdrawn (closed, its task cancelled); the requester is told plainly, the office hears of it.',
+    // Conversation fuzz (2026-10-03, J2): asked first ("Do you want me to cancel …?"), as every cancel is.
+    natural: 'Asked first; on "yes" the request is withdrawn (closed, its task cancelled); the requester is told plainly, the office hears of it.',
     async play(p) {
       await p.say(KAAE_EVENING);
-      const cancel = await p.say('cancel that', { after: 60_000 });
+      const words = await p.say('cancel that', { after: 60_000 });
+      expect(p.answer(words)).toMatch(/^Do you want me to cancel <b>.+<\/b>\?$/);
+      expect(await p.h.taskState(p.request())).not.toMatchObject({ state: 'cancelled' });
+      const cancel = await p.say('yes', { after: 30_000 });
       expect(p.answer(cancel)).toMatch(/^Cancelled <b>.+<\/b>\. Nothing more will be made for it\.$/);
       expect(p.kept).toHaveLength(0);
       expect(await p.h.taskState(p.request())).toMatchObject({ state: 'cancelled' });
@@ -305,11 +309,15 @@ export const CONVERSATION_SCRIPTS: Script[] = [
   },
   {
     id: 'S082', title: 'Sorani "not needed, cancel it"', kinds: ['cancel', 'ckb'],
-    natural: 'Read as a cancellation, answered in Sorani; the request is withdrawn (ADR-230).',
+    natural: 'Read as a cancellation, asked about in Sorani; on "yes" the request is withdrawn (ADR-230; J2).',
     async play(p) {
       await p.say(KAAE_EVENING);
       // "Not needed, cancel it"
-      const cancel = await p.say('پێویست ناکات، هەڵیبوەشێنەوە', { after: 60_000 });
+      const words = await p.say('پێویست ناکات، هەڵیبوەشێنەوە', { after: 60_000 });
+      expect(p.answer(words)).toMatch(/[؀-ۿ]/);
+      expect(await p.h.taskState(p.request())).not.toMatchObject({ state: 'cancelled' });
+      // "Yes"
+      const cancel = await p.say('بەڵێ', { after: 30_000 });
       expect(p.kept).toHaveLength(0);
       expect(p.answer(cancel)).toMatch(/[؀-ۿ]/);
       expect(await p.h.taskState(p.request())).toMatchObject({ state: 'cancelled' });
@@ -362,11 +370,15 @@ export const CONVERSATION_SCRIPTS: Script[] = [
   },
   {
     id: 'S087', title: 'Sorani "no, cancel it"', kinds: ['cancel', 'ckb'],
-    natural: 'Read as a cancellation, in Sorani; the request is withdrawn (ADR-230).',
+    natural: 'Read as a cancellation, in Sorani; asked first, and on "yes" the request is withdrawn (ADR-230; J2).',
     async play(p) {
       await p.say(KAAE_EVENING);
       // "No, cancel it"
-      const cancel = await p.say('نا، هەڵیبوەشێنەوە', { after: 60_000 });
+      const words = await p.say('نا، هەڵیبوەشێنەوە', { after: 60_000 });
+      expect(await p.h.taskState(p.request())).not.toMatchObject({ state: 'cancelled' });
+      expect(p.answer(words)).toMatch(/[؀-ۿ]/);
+      // "Yes"
+      const cancel = await p.say('بەڵێ', { after: 30_000 });
       expect(p.kept).toHaveLength(0);
       // "<title> was cancelled. Nothing more will be made for it."
       expect(p.answer(cancel)).toMatch(/هەڵوەشێنرایەوە/);
