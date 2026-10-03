@@ -268,7 +268,6 @@ export function checkCanvaPptx(
   const texts: string[] = [];
   /** ADR-275: each object's text as drawn: runs under cap="all" or cap="small" in capitals. */
   const shownTexts: string[] = [];
-  const capitalsByObject: boolean[] = [];
   const sourceTextObjects: PptxTextObject[] = [];
   const identities: Array<{ ':@'?: Record<string, unknown> }> = [];
   findOwners(doc, 'p:cNvPr', identities);
@@ -313,12 +312,25 @@ export function checkCanvaPptx(
     const textIdx = texts.length;
     texts.push(text.trim());
     {
-      // ADR-275: the same text with every run whose cap property draws it in capitals uppercased.
+      // ADR-275: the same text with every run whose cap property draws it in capitals uppercased. A
+      // run without its own cap takes the frame's list style for the paragraph's level (`a:lstStyle`
+      // `a:lvlNpPr/a:defRPr`), as PowerPoint and Canva draw it; a run's own cap, "none" included, wins.
+      const listStyles: any[] = [];
+      find(shape, 'a:lstStyle', listStyles);
+      const listCap = (level: number): string | undefined => {
+        const levels: any[] = [];
+        find(listStyles, `a:lvl${level}pPr`, levels);
+        const defaults: any[] = [];
+        findOwners(levels, 'a:defRPr', defaults);
+        return defaults.map(o => String(o?.[':@']?.['@_cap'] ?? '').trim()).find(Boolean);
+      };
       let shown = '';
-      let anyCaps = false;
       for (const paragraph of paragraphs) {
+        const children: any[] = Array.isArray(paragraph) ? paragraph : [paragraph];
+        const lvl = Number(children.find(child => child?.['a:pPr'] !== undefined)?.[':@']?.['@_lvl'] ?? 0);
+        const inherited = listCap(Number.isInteger(lvl) && lvl >= 0 && lvl <= 8 ? lvl + 1 : 1);
         // Runs are the paragraph's own children, in document order.
-        for (const child of Array.isArray(paragraph) ? paragraph : [paragraph]) {
+        for (const child of children) {
           const runNode = child?.['a:r'] ?? child?.['a:fld'];
           if (!runNode) continue;
           const nodes: any[] = [];
@@ -327,15 +339,13 @@ export function checkCanvaPptx(
             .map(node => typeof node === 'string' ? node : String(node?.['#text'] ?? '')).join('');
           const props: any[] = [];
           findOwners(runNode, 'a:rPr', props);
-          const cap = props.map(o => String(o?.[':@']?.['@_cap'] ?? '').trim()).find(Boolean) || 'none';
+          const cap = props.map(o => String(o?.[':@']?.['@_cap'] ?? '').trim()).find(Boolean) || inherited || 'none';
           const drawnInCaps = cap === 'all' || cap === 'small';
-          if (drawnInCaps && runText !== runText.toUpperCase()) anyCaps = true;
           shown += drawnInCaps ? runText.toUpperCase() : runText;
         }
         shown += '\n';
       }
       shownTexts.push(shown.trim());
-      capitalsByObject.push(anyCaps);
     }
     const owners: Array<{ ':@'?: Record<string, unknown> }> = [];
     findOwners(shape, 'p:cNvPr', owners);
@@ -466,13 +476,18 @@ export function checkCanvaPptx(
 
   // Word joiners (U+2060) are invisible: the studio deck adds them so Canva keeps "K-12" on one line.
   const normalize = (s: string) => s.replace(/\u2060/g, '').replace(/\s+/g, ' ').trim();
-  // ADR-275: a block set in capitals matches its copy without regard to case, whether Canva kept the
-  // typed copy under cap="all" or wrote the capitals into the text. Any other block matches exactly
-  // and must not be drawn in capitals the requester did not type.
-  const caseFold = (s: string) => normalize(s).toUpperCase();
-  const copyMatches = (t: string, i: number) => options.uppercaseByIndex?.[i]
-    ? caseFold(t) === caseFold(expectedCopy[i])
-    : normalize(t) === normalize(expectedCopy[i]) && !capitalsByObject[i];
+  // ADR-275: a block set in capitals passes when its text, or its text drawn under cap, equals the copy
+  // in capitals: Canva may keep the typed copy under cap="all" or write the capitals into the text, but a
+  // title handed back without its capitals (cap dropped, or on some runs only) is not the design sent.
+  // Capitals are Latin only (`uppercaseApplies`): a block with Arabic-script letters is drawn as typed.
+  // Any other block matches exactly and must not be drawn in capitals the requester did not type.
+  const copyMatches = (t: string, i: number) => {
+    const expected = expectedCopy[i];
+    if (options.uppercaseByIndex?.[i] && !ARABIC_SCRIPT.test(expected)) {
+      return normalize(shownTexts[i]) === normalize(expected).toUpperCase();
+    }
+    return normalize(t) === normalize(expected) && normalize(shownTexts[i]) === normalize(expected);
+  };
   const copyPass = texts.length === expectedCopy.length && texts.every(copyMatches);
   const fontPass = !unresolvedFont && fonts.length > 0 && offendingObjects.length === 0;
   const hasDirectionMetadata = paragraphDirections.some(paragraph => paragraph.observed !== 'absent');
