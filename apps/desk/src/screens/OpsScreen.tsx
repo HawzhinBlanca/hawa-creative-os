@@ -82,6 +82,25 @@ export const OpsScreen: React.FC = () => {
   const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [opsToast, setOpsToast] = useState<string | null>(null);
   const [inspectingFailure, setInspectingFailure] = useState<FailureItem | null>(null);
+  // One re-drive per press: each one pays for a design again, and the button stayed live while it ran.
+  const [requeueing, setRequeueing] = useState(false);
+  const requeueStarted = useRef(false);
+  const requeueInspected = async () => {
+    if (!inspectingFailure || requeueStarted.current) return;
+    requeueStarted.current = true;
+    setRequeueing(true);
+    try {
+      await apiClient.tasks.redrive(inspectingFailure.id);
+      setOpsToast(`✓ Task ${inspectingFailure.id.substring(0, 8)}… re-queued into operator intake pipeline`);
+    } catch (err: any) {
+      setOpsToast(`✕ Failed to re-queue task: ${err.message || 'Error'}`);
+    } finally {
+      requeueStarted.current = false;
+      setRequeueing(false);
+    }
+    setTimeout(() => setOpsToast(null), 4000);
+    setInspectingFailure(null);
+  };
 
   const fetchOpsData = async () => {
     const sequence = ++refreshSequence.current;
@@ -296,18 +315,10 @@ export const OpsScreen: React.FC = () => {
               </button>
               <button
                 className="btn primary"
-                onClick={async () => {
-                  try {
-                    await apiClient.tasks.redrive(inspectingFailure.id);
-                    setOpsToast(`✓ Task ${inspectingFailure.id.substring(0, 8)}… re-queued into operator intake pipeline`);
-                  } catch (err: any) {
-                    setOpsToast(`✕ Failed to re-queue task: ${err.message || 'Error'}`);
-                  }
-                  setTimeout(() => setOpsToast(null), 4000);
-                  setInspectingFailure(null);
-                }}
+                onClick={() => void requeueInspected()}
+                disabled={requeueing}
               >
-                Re-Queue Task
+                {requeueing ? 'Re-queueing…' : 'Re-Queue Task'}
               </button>
             </div>
           </div>
