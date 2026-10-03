@@ -562,8 +562,9 @@ it('preserves six admitted website photos across mounted internal HTTP and refus
  const open=await customerWebOpenEvent(db,tenantId,admitted.job.id);
  const saved=process.env.HAWA_WORKER_TOKEN,token=['test','customer','photo','projection','worker'].join('_');
  process.env.HAWA_WORKER_TOKEN=token;
+ const singleConnection=createDb(process.env.TEST_DATABASE_URL!,{max:1});
  try {
-  const app=createApp({db,skipTelegramProbe:true,skipPaidModelProbe:true,requesterIntentModel:null});
+  const app=createApp({db:singleConnection,skipTelegramProbe:true,skipPaidModelProbe:true,requesterIntentModel:null});
   const send=async(draft:unknown)=>app.request(`/v1/internal/lifecycle/${open.requestId}/project`,{
    method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
    body:JSON.stringify({v:1,expectedRev:0,rev:1,key:`${open.requestId}:1:open`,ops:[{kind:'createRequest',draft}]})});
@@ -584,6 +585,7 @@ it('preserves six admitted website photos across mounted internal HTTP and refus
    expect((await send({...open.draft,customerWebPhotos:manifest})).status).toBe(400);
   expect((await send({...open.draft,platform:'telegram',sourceChannelId:'12345'})).status).toBe(400);
  } finally {
+  await singleConnection.destroy();
   if(saved===undefined)delete process.env.HAWA_WORKER_TOKEN;else process.env.HAWA_WORKER_TOKEN=saved;
  }
 });

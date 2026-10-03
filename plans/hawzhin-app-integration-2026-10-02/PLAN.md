@@ -312,3 +312,5 @@ Evidence: NATIVE_BRAND_PROVIDER_WAIT_PROOF.json and LIVE_CLIENT_GENERATION_PROOF
 ## Actual six-photo HTTP failure and repair — 2026-10-03
 
 Six actual browser file uploads/replay/order/use-all/member isolation pass13/0. Native worker first projection fails409 IDEMPOTENCY_CONFLICT because openDraft omits customerWebPhotos. Retain4/6 worker and23/1 Core; all owned resources removed. ADR279 preserves only strict bounded web photo manifests; retained owner brief remains authoritative. Mounted HTTP regression red409→200;86 connected checks/757 typed roots/lint pass. Native rerun and full release pending. CUSTOMER_PHOTO_HTTP_PROOF.json.
+
+ADR279 second native lane retains13/0 browser,4/6 worker,23/1 Core; UNVERIFIED_DESIGN at hash-only original read. One-connection mounted HTTP reproduces409. Complete owner-verified reference keeps hash/size checks and needs no additional metadata connection.86 focused/757 roots/lint pass; native and current full gates pending. Prior f5d9ec8c full8288/0/67 retained, not transferred to this runtime.

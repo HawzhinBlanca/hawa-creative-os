@@ -23,3 +23,12 @@ manifest, one task and replay. Changed, omitted or reordered manifests must stil
 fail; malformed manifests must fail before projection. Rerun the native shared
 login/browser/restricted worker/Restate fixture. Keep the original failed report.
 This repair does not enable public generation or qualify provider/Canva quality.
+
+The next native run passed manifest admission but refused originals as
+UNVERIFIED_DESIGN. A one-connection mounted HTTP regression reproduces this:
+projection holds its transaction while a hash-only BlobStore read borrows another
+connection for metadata. Pass the complete already authorized immutable reference
+to BlobStore.read instead. Size and hash checks remain required, and owner/client
+receipt validation still occurs inside the projection transaction. This avoids
+six redundant metadata queries and dependence on a spare pool connection. Keep
+the original native failure and the one-connection red assertion; rerun both.

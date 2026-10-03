@@ -363,7 +363,9 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
     if (web && draft.customerWebPhotos) {
       if(!sourceStore) throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN','The customer photo store is unavailable');
       for(const ref of draft.customerWebPhotos.images) {
-        try { await sourceStore.read(ref.sha256,{verify:true}); }
+        // Ownership and metadata were verified in this transaction. A hash-only
+        // read would borrow a second DB connection to rediscover the same row.
+        try { await sourceStore.read(ref,{verify:true}); }
         catch {throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN','An admitted customer photo is missing or corrupt');}
         await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
           VALUES(${tenantId}::uuid,${taskId}::uuid,${ref.sha256},'reference_image')`.execute(trx);
