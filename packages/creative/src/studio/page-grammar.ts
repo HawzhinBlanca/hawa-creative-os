@@ -730,6 +730,9 @@ function attempt(input: ComposeGrammarInput, units: Unit[], f: number, finish: b
   }
   const contentBottom = placed.length ? placed[placed.length - 1].bottom : flowTop;
   if (contentBottom > limit) return undefined;
+  // No block runs a word past its box (a long word, a URL): this scale cannot carry the copy, and hard
+  // QA's COPY_OVERFLOW would refuse the design.
+  for (const p of placed) for (const t of p.texts) if (measure(t, input.copy.text[t.copyIndex] ?? '').lineWidth > t.width + 2) return undefined;
   if (input.photo && !photoPlaced) return undefined;
   if (!finish) return {} as StudioLayoutV2;
 
