@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T12:49:36Z",
+  "generatedAt": "2026-10-03T12:59:30Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -1339,8 +1339,8 @@
     },
     {
       "path": "adrs/287_desk_requests_on_the_lifecycle_and_task_workflow_retired.md",
-      "sha256": "fe15b2377e752ee9c837b536d1c566cbad00073c163b594320095cdc91336371",
-      "bytes": 11191
+      "sha256": "a3ceacaad6cd052baeca7183432a367cb1361bd1c7383287fbcb4fff8d72b092",
+      "bytes": 18097
     },
     {
       "path": "adrs/288_truthful_operations_health.md",
@@ -3694,8 +3694,8 @@
     },
     {
       "path": "plans/traceability.csv",
-      "sha256": "5b552ed741ae2e7d924fa9e1b6401a314fd993668f31b22f18b4da07111a82a9",
-      "bytes": 918007
+      "sha256": "f0a194bdcc22fbc915b16ea65881dd1007fd88cb5d87a7a4b99ae6a0c13eec9a",
+      "bytes": 919034
     },
     {
       "path": "plans/user-stories.csv",

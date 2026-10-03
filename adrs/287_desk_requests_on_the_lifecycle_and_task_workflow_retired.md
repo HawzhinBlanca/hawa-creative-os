@@ -33,7 +33,7 @@ Two paths still sat outside the request lifecycle:
 
 ### 2.1 Desk "New task" opens a RequestLifecycle request
 
-The Desk sends `workflow: 'office_request'`. The reviewed PDF request keeps `canva_manual`, which stays the designer-owned path (section 4).
+The Desk sends `workflow: 'office_request'`. The reviewed PDF request kept `canva_manual`, the designer-owned path (section 4), until the addendum (section 6) moved it onto the lifecycle too.
 
 Core handles it in `apps/core/src/services/office-desk-request.ts`, in one transaction. The transaction starts in the office member's own scope.
 
@@ -103,7 +103,7 @@ No data is migrated in either direction.
 ## 4. Consequences and what is not changed
 
 - **Desk requests now get automatic drafts, and spend.** The Studio's own budget and spending policy bound them. A Desk member is exempt from the daily automatic-draft caps, as an office director on Telegram is.
-- **The reviewed PDF request stays designer-owned.** The form is "Use reviewed PDF" and the outbox row is `MANUAL_DESK_OWNED`. Moving it needs the source-document evidence on a lifecycle open, which Telegram PDFs have but the Desk upload does not.
+- **The reviewed PDF request stayed designer-owned.** The form is "Use reviewed PDF" and the outbox row was `MANUAL_DESK_OWNED`. Moving it needed the source-document evidence on a lifecycle open, which Telegram PDFs had but the Desk upload did not. The addendum (section 6) gives it that evidence.
 - **Some producers still write a pending `task.created`.** API callers of `POST /v1/tasks` without a workflow, message promotion, unified ingress and WhatsApp still do. Their tasks are dead-lettered `LEGACY_WORKFLOW_RETIRED` and stay in the Desk for a designer. None is used in production today. Routing them to RequestLifecycle, or removing them, is left for when one is wanted.
 - **`runCanvaDraft` keeps one legacy branch.** Without a lifecycle reporter it still reports to Core's canva-status route. DesignRun always passes the reporter. About sixty step tests drive that seam, and Core's canva-status route keeps its legacy outcome handling. Both can go once those tests use the lifecycle reporter.
 - **The outbox's `task.outcome` handler stays.** It drains any row the recorder wrote before this release.
@@ -134,3 +134,85 @@ Run in the worktree, targeted files only. The full suite and the chaos suite wer
 - **Commit 2, affected suites:** 62 files, 521 tests passed. These were every worker test file, Core's re-drive, control, outbox and design-proof tests, and testkit's duplicate-path, service-list and request-log tests.
 - **Static checks.** `tsc -b`, `tsc --noEmit`, the scripts project and the test typecheck (793 test roots) passed. So did the `any` ratchet (964 of 1053) and the egress lint.
 - **Not executed:** the full suite, the chaos suite, a deploy, a live Desk request.
+
+## 6. Addendum — the reviewed PDF request opens on the lifecycle (2026-10-03)
+
+**Status:** Implemented on branch `claude/deskpdf` (from `claude/release-3`). Not deployed. No migration.
+
+### 6.1 Context
+
+Section 4 left the Desk's reviewed-PDF form on `canva_manual`, so a PDF request got no automatic draft. A Telegram PDF brief already opens on RequestLifecycle with its reviewed source: `reviewedSource` on the task's creation event (ADR-145's `ReviewedSourceEvidence`) and the original as the task's `source_document` file. Both channels retain the PDF the same way: the bytes in the blob store and the extraction receipt in `hawa.client_documents`. What the Desk lacked was a confirmation the lifecycle could carry: the Telegram evidence names Telegram update ids, which a Desk save does not have.
+
+### 6.2 Decision
+
+**The form.** The reviewed-PDF form sends `workflow: 'office_request'` and the `sourceDocument` it already named: the receipt id, the source and extraction hashes the member reviewed, and `confirmed: true`. The copy is the member's typed English and Sorani fields, as before. The extracted text is never sent.
+
+**Admission.** Core's Desk intake (`office-desk-request.ts`) admits it in the same single transaction as a "New task", in the office member's own scope:
+
+1. The client and project are checked and the brand DNA pinned (`prepareManualIntake`), as in section 2.1.
+2. The named receipt is checked by `verifyDocumentSource`. This was split out of the manual path's `prepareDocumentIntake` (`client-documents.ts`), which now calls it, so both paths apply the same rules:
+   - the member's tenant role is administrator or operator, the existing boundary for confirming PDF copy;
+   - the receipt belongs to this client;
+   - its source and extraction hashes are the reviewed ones;
+   - the original bytes are stored and read back intact.
+3. `deskReviewedSource` builds the evidence.
+
+**The evidence model.** `ReviewedSourceEvidence` (`@hawa/contracts`) becomes a union of two variants with the same core fields:
+
+- `kind`, `sourceSha256`, `extractionSha256`, `extractorVersion`, `documentId`, `clientId`;
+- `confirmation: 'request_copy_reviewed'`, `confirmedBy`, `copySha256` (sha256 of the request's raw text).
+
+The Telegram variant keeps its two update ids. The Desk variant has:
+
+- `origin: 'hawa_desk'`;
+- `confirmedBy: 'desk:<user id>'`;
+- a required `documentId`;
+- `pageCount`.
+
+Its page references are the extraction's own. The receipt `documentId` is immutable, and each extracted chunk carries its page number. The form has no per-page copy selection, so no per-block page is claimed.
+
+**The open.** `projectLifecycleOpen` takes the evidence with Core's Desk receipt. It refuses with `UNVERIFIED_DESIGN` if the evidence names another client or hashes other words than the brief's raw text. It then writes, as for a Telegram PDF:
+
+- the evidence on the task as `reviewedSource`;
+- the original as the `source_document` task file.
+
+Only identities cross to the worker. The `office.request.open` brief carries the confirmed words and no source reference. The worker's replay matches Core's receipt as in section 2.1.
+
+**The Studio's copy.** `savedDesignCopy` and `savedDesignCopyLocales` read a Desk PDF request's labelled Desk fields verbatim, with their languages: no emoji, divider or remark clean-up. They do not use the Telegram branch, which reads `exactCopy`. Nothing is invented. A request without copy is refused at intake.
+
+**Idempotency.** The body hash under the Desk's Idempotency-Key covers the named receipt. The same save answers the same task, even after the parser is gone: the earlier save is found before anything is checked again. Other words, or another receipt, under the same key are refused with 409.
+
+**The Desk's refusals.** The form shows the server's own words:
+
+- 403: an operator must save it, or the PDF is not in this client;
+- 409: the evidence changed;
+- 422: no confirmation, or no copy.
+
+A 409 on a fresh key is definitive for a PDF request: nothing was made. A retry record frozen by the earlier Desk, which differs only by `canva_manual`, is retried exactly as it was sent under its key.
+
+### 6.3 Unchanged
+
+- `canva_manual` with `sourceDocument` stays on the server for API callers, the hawa-chaos drivers, and a browser still running the earlier Desk.
+- A Desk PDF request takes the client's default canvas, as a Desk "New task" does. A Telegram PDF without a size takes 1080×1350.
+- A redo of a reviewed-source request is not converted into a fresh round by the office retry (`lifecycle-office-retry.ts`). The rule is the same for both channels.
+
+### 6.4 Rollback
+
+Roll back to the previous release.
+
+- Requests opened by this addendum are ordinary lifecycle requests. The previous Core reads their `reviewedSource` with the Telegram copy branch, which needs `exactCopy` in the Desk body. A Studio re-run on such a request would therefore refuse with `COPY_REQUIRED` and go to a designer. It invents nothing.
+- The rolled-back Desk sends `canva_manual` again.
+
+### 6.5 Qualification — 2026-10-03
+
+Targeted files only. The full suite and the chaos suite were not run: a deploy gate runs the full suite.
+
+- **New Core tests,** `apps/core/test/office-desk-pdf-request.test.ts`: 2 of 2 passed.
+  - **The open:** an automatic `designing` lifecycle request; `reviewedSource` equal to the expected evidence on the outbox row and the creation event; the `source_document` file; no extraction text and no source reference in the worker's brief; the Studio's copy and languages verbatim; the Desk task view's original PDF; the worker's replay; same-key replay after the parser is gone; a changed body refused.
+  - **Refusals, with nothing recorded:** no confirmation, a malformed id, changed source or extraction hashes, an unknown or other client's receipt, no copy, a client-scoped designer, and damaged original bytes.
+- **Desk tests,** `apps/desk/test/document-request.test.ts` (9, two new) and `manualTaskIntake.test.ts`: 20 of 20 passed.
+- **Red check.** The six changed source files were restored to `claude/release-3` with the new tests in place. Four tests failed (both Core tests and two Desk tests) and seven passed. The frozen-record retry passes on the old Desk by construction: the old Desk sent `canva_manual` itself.
+- **Affected suites:** 36 files, 613 passed, 2 skipped (opt-in recovery drills). These were every Core test touching saved copy, the lifecycle open, documents or Desk requests, the worker's Desk-open and ownership tests, and the Desk intake tests.
+- **Static checks.** `pnpm typecheck` (802 test roots) and `pnpm lint` passed, including the `any` ratchet (975 of 1053) and the egress lint.
+- **Not executed:** the full suite, the chaos suite, a deploy, a live Desk PDF request with the parser sidecar.
+
