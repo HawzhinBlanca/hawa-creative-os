@@ -7,7 +7,7 @@ import { DEFAULT_TENANT_ID } from '../core-context.js';
 import { log } from '../logging.js';
 import { createRedrive } from '../services/redrive.js';
 import { rejectLegacyTaskDesignWrite } from './lifecycle-design-proof.js';
-import { requestLifecycleDesignRetry } from '../services/lifecycle-office-retry.js';
+import { OFFICE_RETRY_ROLES, requestLifecycleDesignRetry } from '../services/lifecycle-office-retry.js';
 import { requestLifecycleWithdraw } from '../services/lifecycle-withdraw.js';
 import { SYSTEM_AUTOMATION_USER_ID } from '@hawa/contracts';
 import { withRlsContext } from '@hawa/db';
@@ -112,6 +112,11 @@ export function registerControlsRoutes(ctx: RouteContext): void {
   registerRoute('post', '/tasks/:taskId/redrive', async (c: any) => {
     const auth = verifyRequestAuth(c);
     if (!auth.authenticated) return problem(c, 401, 'Authentication Required');
+    // A re-drive pays for the design again. The request-owned retry checks these roles in its service;
+    // the legacy re-drive below took any signed-in role.
+    if (!(OFFICE_RETRY_ROLES as readonly string[]).includes(auth.role || '')) {
+      return problem(c, 403, 'Forbidden', 'An office operator or art director is required to design a task again.');
+    }
     // A request-owned task is designed again by its request's own object (ADR-142), so the Desk's
     // "Re-drive Generation" works for it; the legacy re-drive below would refuse it (LIFECYCLE_OWNED).
     const ownedBy = await lifecycleRequestOf(auth, c.req.param('taskId')).catch(() => null);

@@ -56,3 +56,14 @@ describe('fault injection is for operators (hunt-3)', () => {
     expect((await app.request('/v1/operations/canva/simulate-recovery', as('operator'))).status).toBe(200);
   });
 });
+
+describe('re-driving a design spends on it again (hunt-3)', () => {
+  it.each(['auditor', 'requester', 'designer'])('%s cannot re-drive a task', async (role) => {
+    const taskId = await newTask();
+    expect((await app.request(`/v1/tasks/${taskId}/redrive`, as(role))).status).toBe(403);
+  });
+  it('an operator is not refused for the role', async () => {
+    const taskId = await newTask();
+    expect((await app.request(`/v1/tasks/${taskId}/redrive`, as('operator'))).status).not.toBe(403);
+  });
+});
