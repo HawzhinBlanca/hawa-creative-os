@@ -641,19 +641,18 @@ export const WorkScreen: React.FC<WorkScreenProps> = ({
       let reservation: ReservedDecisionAction | null = null;
       let actionKey = '';
       try {
-        if (requestOwned) {
-          // The task version is part of the key: a press whose answer was lost is retried with the same
-          // id, but once that delivery moved the task on (started, then failed back to APPROVED) the next
-          // press is a new action. A kept id would be answered from the spent press (finding 19).
-          actionKey = JSON.stringify([sessionUser?.id, taskId, approval.decisionId, selectedTask.version ?? null, 'deliver',
-            ...(acknowledged.length ? [[...acknowledged].sort()] : [])]);
-          reservation = await reserveDecisionAction(actionKey);
-        }
+        // Every delivery carries an action key, a task no request owns included (bug hunt 3): a press
+        // whose answer was lost is retried with the same id. The task version is part of the key: once
+        // that delivery moved the task on (started, then failed back to APPROVED) the next press is a
+        // new action. A kept id would be answered from the spent press (finding 19).
+        actionKey = JSON.stringify([sessionUser?.id, taskId, approval.decisionId, selectedTask.version ?? null, 'deliver',
+          ...(acknowledged.length ? [[...acknowledged].sort()] : [])]);
+        reservation = await reserveDecisionAction(actionKey);
         delivery = await apiClient.tasks.publish(taskId,
           { destination: 'google_drive', ...(requestOwned ? { approvalId: approval.decisionId } : {}),
             ...(acknowledged.length ? { acknowledgeLateChanges: acknowledged } : {}) },
-          reservation?.actionId);
-        if (reservation) completeDecisionAction(actionKey, reservation);
+          reservation.actionId);
+        completeDecisionAction(actionKey, reservation);
         break;
       } catch (err: any) {
         const late: LateRequesterChangeView[] | null = err?.problem?.code === 'LATE_REQUESTER_CHANGE' &&

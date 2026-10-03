@@ -414,6 +414,28 @@ describe('approve and request revision are mutations', () => {
     expect(core.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/publish'))).toHaveLength(0);
   });
 
+  it('sends a stable idempotency key when it delivers a task no request owns (bug hunt 3)', async () => {
+    const core = fakeCore([{ ...approvable('t1', 'Legacy poster'), status: 'APPROVED', approved: true }]);
+    const { view } = await renderWork(new FakeStream('connected'));
+    const publishes = () => core.calls.filter((c) => c.method === 'POST' && c.path === '/v1/tasks/t1/publish');
+    const sent = (n: number) => React.act(async () => {
+      // The key is a digest of the action (crypto.subtle): real work no fake timer drives.
+      await vi.waitFor(() => { if (publishes().length < n) throw new Error('the delivery has not reached Core yet'); }, { timeout: 5000, interval: 5 });
+    });
+    await click(view.container.querySelector('#btn-deliver-approved'));
+    await sent(1);
+    await advance(500);
+    const first = publishes()[0];
+    expect(first.body).toEqual({ destination: 'google_drive' });
+    expect(first.headers.get('Idempotency-Key')).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    // Core did not answer with a delivery: pressing again retries the same action, with the same key.
+    expect(view.text()).toContain('Delivery failed');
+    await click(view.container.querySelector('#btn-deliver-approved'));
+    await sent(2);
+    await advance(500);
+    expect(publishes()[1].headers.get('Idempotency-Key')).toBe(first.headers.get('Idempotency-Key'));
+  });
+
   it('approve shows pending, leaves the status Core reported until Core answers, then reads the task and the list again', async () => {
     const stream = new FakeStream('connected');
     const core = fakeCore([approvable('t1', 'Members evening poster')]);
