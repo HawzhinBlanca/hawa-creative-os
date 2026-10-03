@@ -6,6 +6,8 @@ import { composePosterLayout, POSTER_VARIANTS } from '../src/studio/poster-gramm
 import { measureTextGeometry } from '../src/studio/render-layout-v2.js';
 import { validateLayoutV2 } from '../src/studio/validate-layout-v2.js';
 import { ALIGNMENT_POLICY, computeLayoutMetrics } from '../src/studio/layout-metrics.js';
+import { declaredTextContrast } from '../src/studio/composite-contrast.js';
+import { requiredContrast } from '../src/studio/house-rules.js';
 import { studioReferenceFromRaw } from '../src/studio/hard-qa.js';
 import { encodeStudioTransferV2 } from '../src/studio/transfer-v2.js';
 import { checkCanvaPptx } from '../../qa/src/canva-pptx-check.js';
@@ -170,4 +172,16 @@ describe('a landscape poster\'s display title reaches the Canva deck', () => {
       expect(check.copyPass && check.fontPass).toBe(true);
     });
   }
+});
+
+describe('the composer\'s contrast check is at least as strict as hard QA\'s', () => {
+  // Before: checkGrammarLayout read the gradient under a block at five sample points and passed the
+  // gold lead of an all-capitals cover at 4.5:1, while hard QA bounds the gradient by its channel
+  // envelope and measured 4.48:1 (CONTRAST): the composer handed on a design QA always refuses.
+  it('all-capitals cover with the triangle band, 1080x1080 with a 3.2:1 logo', () => {
+    const lines = ['QUALITY ASSURANCE WORKSHOP', 'FOR UNIVERSITY DEANS', '15 OCTOBER 2026'];
+    const l = tryCompose(() => composeGrammarLayout(input(lines, ['title', 'subtitle', 'date'], { width: 1080, height: 1080, logoAspect: 3.2, tone: 'cover', variant: 'pattern' })));
+    if (!l) return;
+    for (const t of l.text) expect(declaredTextContrast(l, t), `block ${t.copyIndex}`).toBeGreaterThanOrEqual(requiredContrast(t.fontSize, Boolean(t.bold)));
+  });
 });

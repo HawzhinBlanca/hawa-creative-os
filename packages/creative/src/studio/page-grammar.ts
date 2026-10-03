@@ -12,7 +12,7 @@ import type {
 } from './layout-v2.js';
 import { HOUSE_RULES, getSafeZoneBox, logoClearZone, minLogoWidth, requiredContrast } from './house-rules.js';
 import { balancedBoxWidths, measureTextGeometry } from './render-layout-v2.js';
-import { calculateLuminanceContrastRatio, hexToLuminance } from './composite-contrast.js';
+import { calculateLuminanceContrastRatio, declaredTextContrast, hexToLuminance } from './composite-contrast.js';
 import { fillColoursUnder } from './shape-gradient.js';
 import { sunburstRadius } from './brand-elements.js';
 import { admitPageGrammarFromReference } from './page-grammar-admission.js';
@@ -851,7 +851,9 @@ export function checkGrammarLayout(layout: StudioLayoutV2, clear: Box): void {
     if (hit(t, clear)) throw new GrammarInfeasibleError(`copy block ${t.copyIndex} is in the logo's clear space`);
     for (const u of layout.text) if (u !== t && hit(t, u)) throw new GrammarInfeasibleError(`copy blocks ${t.copyIndex} and ${u.copyIndex} overlap`);
     const under = surfaceColoursUnder(layout, t);
-    const worst = Math.min(...under.map((c) => calculateLuminanceContrastRatio(hexToLuminance(t.color), hexToLuminance(c))));
+    // Hard QA's own declared check too (CONTRAST): it bounds a gradient by its channel envelope, which
+    // can read a little lower than the colours sampled under the box.
+    const worst = Math.min(declaredTextContrast(layout, t), ...under.map((c) => calculateLuminanceContrastRatio(hexToLuminance(t.color), hexToLuminance(c))));
     if (worst < requiredContrast(t.fontSize, Boolean(t.bold))) {
       throw new GrammarInfeasibleError(`copy block ${t.copyIndex} is ${worst.toFixed(2)}:1 on its surface`);
     }
