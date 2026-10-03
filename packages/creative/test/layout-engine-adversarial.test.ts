@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { strFromU8, unzipSync } from 'fflate';
 import { composeGrammarLayout, pageGrammarFromRaw, GrammarInfeasibleError, type ComposeGrammarInput } from '../src/studio/page-grammar.js';
 import { composePosterLayout, POSTER_VARIANTS } from '../src/studio/poster-grammar.js';
-import { measureTextGeometry } from '../src/studio/render-layout-v2.js';
+import { measureTextGeometry, wrappedLinesOf } from '../src/studio/render-layout-v2.js';
 import { validateLayoutV2 } from '../src/studio/validate-layout-v2.js';
 import { ALIGNMENT_POLICY, computeLayoutMetrics } from '../src/studio/layout-metrics.js';
 import { declaredTextContrast } from '../src/studio/composite-contrast.js';
@@ -213,5 +214,24 @@ describe('the recipe solver never sets a word or a call to action wider than its
         }
       });
     }
+  }
+});
+
+describe('a story-format recipe sets its logo and copy on the grid it declares', () => {
+  // Before: on 1080x1920 the solver's safe area took the story zone's side (0.06 of the width, 65px)
+  // while the layout declared a 76px grid margin. The logo stood at 65 and lined up with nothing, so a
+  // title-only story measured 0.5 on hard QA's alignment: 380 of 12,096
+  // deterministic recipe layouts failed POOR_GRID_ALIGNMENT, almost all of them stories.
+  const photos: SolverPhoto[] = [0, 1, 2, 3].map((i) => ({ photoIndex: i, width: 1280, height: 853, salient: { x: 0.45, y: 0.6 }, quiet: 'none' as const,
+    ...(i === 3 ? { focus: { x: 0.3, y: 0.35 }, faceShare: 0.3, cutoutSize: { width: 600, height: 1100 }, cutoutPixelSize: { width: 600, height: 1100 } } : {}) }));
+  for (const recipe of ['hero_fade_report', 'scrim_caption'] as const) {
+    it(recipe, () => {
+      const l = solveRecipe({
+        width: 1080, height: 1920, copy: { text: { 0: 'Workshop' } }, photos, photoSelection: { mode: 'choose', minimum: 1 }, palette: PALETTE, logoAspect: 1,
+        choice: { recipe, heroPhotoIndex: recipe === 'cutout_speaker' ? 3 : 0, texturePhotoIndex: null, cutoutPhotoIndex: recipe === 'cutout_speaker' ? 3 : null, slots: [{ copyIndex: 0, slot: 'title' }], params: { frame: 'inset', align: 'start' } },
+      });
+      expect([l.logo.x, l.logo.x + l.logo.width]).toContain(l.grid.margin);
+      expect(computeLayoutMetrics(l).alignmentScore).toBeGreaterThanOrEqual(ALIGNMENT_POLICY.passScore);
+    });
   }
 });

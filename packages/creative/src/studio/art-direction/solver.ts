@@ -391,7 +391,12 @@ class SolveContext {
     this.m = marginFor(this.W, this.H);
     this.wide = this.W / this.H >= 1.3;
     this.story = isStoryFormat(this.W, this.H);
-    this.safe = getSafeZoneBox(this.W, this.H, this.m);
+    // A story's safe zone takes its own side share (0.06 of the width), narrower than the margin the
+    // layout's grid declares (0.07); its sides are drawn in to the margin, so a logo or a block set on
+    // the safe area lines up with the grid the layout declares (and hard QA's alignment reads).
+    const zone = getSafeZoneBox(this.W, this.H, this.m);
+    const side = Math.max(zone.x, this.m);
+    this.safe = { x: side, y: zone.y, width: this.W - 2 * side, height: zone.height };
     this.tones = brandTones(input.palette);
     this.blocks = blocksOf(input);
     this.rtl = this.blocks.filter((b) => b.arabic).length > this.blocks.length / 2;
