@@ -16,6 +16,12 @@
  *     (same key, same normalised brief) and starts the design run.
  * The Desk's Idempotency-Key names the command (`office-open:<key>`): a repeat with the same body
  * answers the same task, a different body under that key is refused.
+ *
+ * ADR-287 addendum: the reviewed-PDF form opens the same way. Its `sourceDocument` names the retained
+ * receipt the member reviewed; in the same transaction and scope Core checks it (client, hashes, intact
+ * original bytes, an operator's confirmation) and the request carries the reviewed source's evidence as a
+ * Telegram PDF brief does (`reviewedSource`, the `source_document` task file). The copy is the member's
+ * confirmed words, verbatim; the extraction stays evidence and is never copy.
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { IdempotencyConflictError, sql, withRlsContext, type BlobStore, type Database, type Kysely } from '@hawa/db';
@@ -27,9 +33,13 @@ import { chatAutoDraftsEnabled } from './chat-intake.js';
 import { openDraft } from './lifecycle-open-draft.js';
 import { projectLifecycleOpen } from './lifecycle-projection.js';
 import { prepareManualIntake } from './manual-intake-scope.js';
+import { deskReviewedSource, verifyDocumentSource } from './client-documents.js';
 import { deskChannelFor } from './office-desk-channel.js';
 
-/** The workflow value the Desk's "New task" form sends. `canva_manual` stays the designer-owned path (PDF requests). */
+/**
+ * The workflow value the Desk's "New task" and reviewed-PDF forms send. `canva_manual` stays the
+ * designer-owned path for API callers, the chaos drivers and a Desk from an earlier release.
+ */
 export const OFFICE_REQUEST_WORKFLOW = 'office_request';
 
 export class DeskRequestRefused extends Error {
@@ -37,6 +47,7 @@ export class DeskRequestRefused extends Error {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SHA256 = /^[0-9a-f]{64}$/;
 const TEXT_LIMITS = { title: 200, headlineEn: 2000, headlineCkb: 2000, copyEn: 20000, copyCkb: 20000,
   designInstructions: 4000, referenceAssets: 4000, description: 40000 } as const;
 
@@ -55,6 +66,19 @@ export interface DeskRequestBody {
   description: string;
   priority: string;
   source: { platform: 'hawa_desk'; externalId: string };
+  /** ADR-287 addendum: the retained PDF the member reviewed and confirmed this copy against. */
+  sourceDocument?: { id: string; sourceSha256: string; extractionSha256: string; confirmed: true };
+}
+
+/** The reviewed PDF the form names, by shape only; its receipt is checked in the admitting transaction. */
+function reviewedDocument(value: unknown): DeskRequestBody['sourceDocument'] {
+  if (value === undefined) return undefined;
+  const source = value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  if (source.confirmed !== true) throw new DeskRequestRefused(422, 'Review the original PDF and explicitly confirm the request copy.');
+  if (typeof source.id !== 'string' || !UUID.test(source.id) || typeof source.sourceSha256 !== 'string' || !SHA256.test(source.sourceSha256) ||
+      typeof source.extractionSha256 !== 'string' || !SHA256.test(source.extractionSha256))
+    throw new DeskRequestRefused(422, 'The reviewed PDF could not be identified. Reopen the saved PDF and review it again.');
+  return { id: source.id.toLowerCase(), sourceSha256: source.sourceSha256, extractionSha256: source.extractionSha256, confirmed: true };
 }
 
 /** The submitted body, checked and reduced to the fields a Desk request has. */
@@ -73,6 +97,7 @@ export function deskRequestBody(raw: Record<string, unknown>): DeskRequestBody {
     throw new DeskRequestRefused(422, 'Choose a registered project in the selected client');
   const title = (text('title', true) as string).trim();
   if (!title) throw new DeskRequestRefused(422, 'The request needs a title');
+  const sourceDocument = reviewedDocument(raw.sourceDocument);
   const body: DeskRequestBody = {
     workflow: OFFICE_REQUEST_WORKFLOW,
     clientId: raw.clientId.toLowerCase(),
@@ -88,6 +113,7 @@ export function deskRequestBody(raw: Record<string, unknown>): DeskRequestBody {
     priority: typeof raw.priority === 'string' && raw.priority.length <= 20 ? raw.priority : 'routine',
     source: { platform: 'hawa_desk', externalId: typeof (raw.source as { externalId?: unknown } | undefined)?.externalId === 'string'
       ? String((raw.source as { externalId: string }).externalId).slice(0, 120) : 'operator-desk' },
+    ...(sourceDocument ? { sourceDocument } : {}),
   };
   const copy = deskCopyFields(body);
   if (!copy.length) throw new DeskRequestRefused(422, 'Type the exact words for the design (English or Kurdish) before saving');
@@ -181,8 +207,12 @@ export async function openDeskRequest(db: Kysely<Database>, sourceStore: BlobSto
     const built = deskRequestDraft(body, requestId, actor.userId);
     const draft = openDraft(built, requestId);
     if (!draft || canonical(draft) !== canonical(built)) throw new DeskRequestRefused(422, 'The request could not be read as a design brief');
+    // ADR-287 addendum: a reviewed PDF is checked against its retained receipt in the member's own scope.
+    const reviewedSource = body.sourceDocument ? deskReviewedSource(await verifyDocumentSource(trx, sourceStore,
+      { tenantId: actor.tenantId, clientId: body.clientId, source: body.sourceDocument }), { userId: actor.userId, copy: draft.rawText }) : undefined;
     const opened = await projectLifecycleOpen(trx, { requestId, tenantId: actor.tenantId, expectedRev: 0, rev: 1,
-      key: `${requestId}:1:open`, draft }, sourceStore, { userId: actor.userId.toLowerCase(), dnaVersion, body: body as unknown as Record<string, unknown> });
+      key: `${requestId}:1:open`, draft }, sourceStore, { userId: actor.userId.toLowerCase(), dnaVersion, body: body as unknown as Record<string, unknown>,
+      ...(reviewedSource ? { reviewedSource } : {}) });
     await trx.insertInto('outbox_commands').values({
       tenant_id: actor.tenantId, aggregate_type: 'request', aggregate_id: requestId, command_type: 'office.request.open',
       idempotency_key: commandKey,

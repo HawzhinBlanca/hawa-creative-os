@@ -225,12 +225,11 @@ export function registerTasksRoutes(ctx: RouteContext): void {
   });
 
   /**
-   * A Desk "New task" (ADR-287): opened on RequestLifecycle by services/office-desk-request.ts. The
-   * answer is the request's task, as the manual intake answered its own: 201 when it was opened now,
-   * 200 for the same request saved again under the same key.
+   * A Desk "New task" or reviewed-PDF request (ADR-287 and its addendum): opened on RequestLifecycle by
+   * services/office-desk-request.ts. The answer is the request's task, as the manual intake answered its
+   * own: 201 when it was opened now, 200 for the same request saved again under the same key.
    */
   async function createDeskRequest(c: any, auth: ReturnType<typeof verifyRequestAuth>, body: Record<string, unknown>) {
-    if (body.sourceDocument !== undefined) return problem(c, 422, 'Document Request Invalid', 'Use the reviewed PDF request form for a PDF request.');
     if (!db) return problem(c, 503, 'Database Unavailable', 'A Desk request needs PostgreSQL: it is opened on the request lifecycle.');
     if (!auth.userId || auth.role === 'service' || auth.role === 'adapter')
       return problem(c, 403, 'Office Member Required', 'A Desk request is made by a signed-in office member.');
@@ -253,6 +252,7 @@ export function registerTasksRoutes(ctx: RouteContext): void {
       return c.json(task, opened.created ? 201 : 200);
     } catch (err: any) {
       if (err instanceof DeskRequestRefused) return problem(c, err.status, 'Desk Request Refused', err.message);
+      if (err instanceof DocumentIntakeError) return problem(c, err.status, 'Document Request Refused', err.message);
       if (err instanceof ManualIntakeScopeError) return problem(c, 403, 'Client Scope Unavailable', err.message);
       if (err instanceof IdempotencyConflictError) return problem(c, 409, 'Idempotency Conflict', 'Idempotency conflict: key already used with differing payload');
       if (err instanceof LifecycleProjectionConflict) return problem(c, 409, 'Request Not Opened', err.message);

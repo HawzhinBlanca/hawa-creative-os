@@ -1,7 +1,7 @@
 import { authorizeCustomerWebOpen, canonicalCustomerValue } from '../customer/customer-web-lifecycle.js';
 import { officeReviewUrl } from './desk-review-link.js';
 import { createHash } from 'node:crypto';
-import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef, type DraftImageRef, type LifecycleAlbumRef, type LifecycleSourceRef } from '@hawa/contracts';
+import { CHANNEL_INGRESS_USER_ID, parseBlobRef, type BlobRef, type DeskReviewedSourceEvidence, type DraftImageRef, type LifecycleAlbumRef, type LifecycleSourceRef } from '@hawa/contracts';
 import { sourceCopyConfirmation } from '@hawa/domain';
 import { type BlobStore } from '@hawa/db';
 import { blobStoreFor } from './blob-store-context.js';
@@ -251,8 +251,11 @@ async function manualOpenAlert(trx: Kysely<Database>, tenantId: string,
 
 export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLifecycleProjection,
   sourceStore: BlobStore | null = blobStoreFor(db),
-  /** ADR-287: Core's own Desk intake, in the transaction that admitted the office member's request. */
-  office?: { userId: string; dnaVersion: number; body: Record<string, unknown> }): Promise<OpenLifecycleResult> {
+  /**
+   * ADR-287: Core's own Desk intake, in the transaction that admitted the office member's request. A
+   * reviewed-PDF request (the ADR's addendum) also carries the reviewed source's evidence, checked there.
+   */
+  office?: { userId: string; dnaVersion: number; body: Record<string, unknown>; reviewedSource?: DeskReviewedSourceEvidence }): Promise<OpenLifecycleResult> {
   const { requestId, tenantId, draft, key } = input;
   const hash = createHash('sha256').update(canonical({ ...input, draft: { ...draft, tenantId } })).digest('hex');
   return withRlsContext(db, { tenantId, userId: CHANNEL_INGRESS_USER_ID, role: 'operator' }, async (trx) => {
@@ -312,6 +315,12 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
       if (reviewed.upload.target) throw new LifecycleProjectionConflict('WRONG_STAGE', 'A revision source cannot open a new request');
       admittedSource = decision.sourceUpdate;
     }
+    // ADR-287 addendum: a Desk PDF's evidence binds the same client and the very words this brief opens with.
+    const deskSource = office?.reviewedSource;
+    if (deskSource && (draft.platform !== 'hawa_desk' || deskSource.clientId !== draft.clientId || draft.lifecycleSource ||
+        deskSource.copySha256 !== createHash('sha256').update(draft.rawText).digest('hex')))
+      throw new LifecycleProjectionConflict('UNVERIFIED_DESIGN', 'The reviewed PDF is not bound to this Desk brief');
+    const sourceEvidence = reviewed?.evidence ?? deskSource;
     if (draft.lifecycleAlbum) {
       const decision = await readNewBriefDecision(trx, tenantId, draft.lifecycleAlbum.updateId);
       const decided = decision && decisionDraftFor(decision, requestId);
@@ -345,6 +354,8 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
           ...(reviewed.upload.variant ? { variant: reviewed.upload.variant } : {}),
           copyEn: /[\u0600-\u06ff]/.test(draft.rawText) ? '' : draft.rawText,
           copyCkb: /[\u0600-\u06ff]/.test(draft.rawText) ? draft.rawText : '' } : {}),
+        // The Desk's labelled copy fields stay the copy's authority (saved-design-copy.ts).
+        ...(deskSource ? { reviewedSource: deskSource } : {}),
         ...((admittedSource ?? anchored?.sourceUpdate) !== undefined ? { rawJson: admittedSource ?? anchored?.sourceUpdate } : {}) },
         { outboxState: 'recorded',...(web ? {customer:{...web.owner,dnaVersion:web.dnaVersion,body:web.receipt.body}} : {}),
           ...(office ? { office } : {}),...(anchored?.detailsRequired ? {detailsRequired:true} : {}) });
@@ -382,8 +393,8 @@ export async function projectLifecycleOpen(db: Kysely<Database>, input: OpenLife
       }
     }
     if (draft.lifecycleAlbum) await attachAlbum(trx, tenantId, taskId, draft.lifecycleAlbum);
-    if (reviewed) await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
-      VALUES (${tenantId}::uuid,${taskId}::uuid,${reviewed.evidence.sourceSha256},'source_document') ON CONFLICT DO NOTHING`.execute(trx);
+    if (sourceEvidence) await sql`INSERT INTO hawa.task_files(tenant_id,task_id,sha256,role)
+      VALUES (${tenantId}::uuid,${taskId}::uuid,${sourceEvidence.sourceSha256},'source_document') ON CONFLICT DO NOTHING`.execute(trx);
     if (draft.lifecycleImage) {
       await sql`INSERT INTO hawa.task_files (tenant_id, task_id, sha256, role)
         VALUES (${tenantId}::uuid, ${taskId}::uuid, ${draft.lifecycleImage.sha256}, 'reference_image')`.execute(trx);

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { sql, type Database, type Kysely, type BlobStore } from '@hawa/db';
+import type { DeskReviewedSourceEvidence } from '@hawa/contracts';
 import type { ParsedDocument } from '@hawa/retrieval';
 
 export class DocumentIntakeError extends Error {
@@ -40,10 +41,14 @@ export async function retainDocument(trx: Kysely<Database>, input: {
   return row;
 }
 
-/** Evidence is read from the immutable server receipt, never trusted from browser extraction text. */
-export async function prepareDocumentIntake(trx: Kysely<Database>, store: BlobStore | null, input: {
-  tenantId: string; clientId: string; userId: string; source: unknown;
-}) {
+/**
+ * The Desk's reviewed PDF, checked against the immutable server receipt in this transaction: the member may
+ * confirm request copy, the receipt belongs to this client, its source and extraction hashes are the ones
+ * the member reviewed, and the original bytes are stored and intact. Browser extraction text is never trusted.
+ */
+export async function verifyDocumentSource(trx: Kysely<Database>, store: BlobStore | null, input: {
+  tenantId: string; clientId: string; source: unknown;
+}): Promise<DocumentRow> {
   // The existing durable outbox admits office operators/admins. Match that boundary explicitly.
   const permission = (await sql<{ allowed: boolean }>`SELECT hawa.has_tenant_role(${input.tenantId}::uuid,
     ARRAY['administrator','operator']::hawa.membership_role[]) AS allowed`.execute(trx)).rows[0];
@@ -62,6 +67,29 @@ export async function prepareDocumentIntake(trx: Kysely<Database>, store: BlobSt
   if (!blob || blob.media_type !== 'application/pdf') throw new DocumentIntakeError(503, 'The original PDF metadata is unavailable.');
   try { await store.read({ sha256: row.source_sha256, size: Number(blob.size), mediaType: 'application/pdf' }, { verify: true }); }
   catch { throw new DocumentIntakeError(503, 'The original PDF is missing or damaged. Restore it before creating a request.'); }
+  return row;
+}
+
+/** Evidence is read from the immutable server receipt, never trusted from browser extraction text. */
+export async function prepareDocumentIntake(trx: Kysely<Database>, store: BlobStore | null, input: {
+  tenantId: string; clientId: string; userId: string; source: unknown;
+}) {
+  const row = await verifyDocumentSource(trx, store, input);
   return { sourceDocument: { ...documentReceipt(row), confirmedBy: input.userId,
     confirmedAt: new Date().toISOString(), confirmation: 'request_copy_reviewed', knowledgeApproved: false } };
+}
+
+/**
+ * ADR-287 addendum: the evidence a Desk PDF request carries on RequestLifecycle, in the shape a Telegram
+ * PDF brief's reviewed source has (ADR-145): the stored original, the extraction receipt it was reviewed
+ * from (with its pages), who confirmed the exact words, and those words' hash.
+ */
+export function deskReviewedSource(row: DocumentRow, input: { userId: string; copy: string }): DeskReviewedSourceEvidence {
+  const extraction = JSON.parse(row.extraction_json) as { extraction?: { pageCount?: unknown } };
+  const pageCount = extraction.extraction?.pageCount;
+  return { kind: 'pdf', origin: 'hawa_desk', sourceSha256: row.source_sha256, extractionSha256: row.extraction_sha256,
+    documentId: row.id, extractorVersion: row.extractor_version, clientId: row.client_id,
+    pageCount: Number.isSafeInteger(pageCount) && Number(pageCount) > 0 ? Number(pageCount) : null,
+    confirmedBy: `desk:${input.userId.toLowerCase()}`, confirmation: 'request_copy_reviewed',
+    copySha256: createHash('sha256').update(input.copy).digest('hex') };
 }
