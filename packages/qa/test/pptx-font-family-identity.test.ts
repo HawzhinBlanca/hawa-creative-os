@@ -16,6 +16,9 @@ describe('captured font family identity', () => {
     {name:'unmeasured custom style',text:'Hello',face:'Office Sans Bold',options:{fontsByIndex:['Office Sans']}},
     {name:'trailing unknown token',text:'Hello',face:'Verdana Bold Fake',options:{fontsByIndex:['Verdana']}},
     {name:'extra style on exact face',text:'Hello',face:'Cinzel SemiBold Bold',options:{fontsByIndex:['Cinzel SemiBold']}},
+    {name:'Crimson unverified family',text:'Hello',face:'Crimson Pro Fake',options:{fontsByIndex:['Crimson Pro']}},
+    {name:'Crimson extra token',text:'Hello',face:'Crimson Pro Bold Fake',options:{fontsByIndex:['Crimson Pro']}},
+    {name:'Crimson distinct width',text:'Hello',face:'Crimson Pro Narrow',options:{fontsByIndex:['Crimson Pro']}},
   ])('refuses unverified family extension: $name', ({text,face,options}) => {
     const result=checkCanvaPptx(deck(run(text,face,face)),[text],options);
     expect(result.copyPass).toBe(true);
@@ -30,6 +33,7 @@ describe('captured font family identity', () => {
     ['Playfair Display','Playfair Display SemiBold Italic'], ['Plus Jakarta Sans','Plus Jakarta Sans Medium'],
     ['Noto Sans Arabic','Noto Sans Arabic Regular'], ['Noto Sans Arabic','Noto Sans Arabic Bold'],
     ['Amiri','Amiri Regular'], ['IBM Plex Sans Arabic','IBM Plex Sans Arabic Bold'], ['Vazirmatn','Vazirmatn Regular'],
+    ['Crimson Pro','Crimson Pro Bold'],
   ])('preserves measured family/full-name equivalence: %s / %s', (expected,face) => {
     expect(checkCanvaPptx(deck(run('Hello',face)),['Hello'],{fontsByIndex:[expected]}).fontPass).toBe(true);
   });

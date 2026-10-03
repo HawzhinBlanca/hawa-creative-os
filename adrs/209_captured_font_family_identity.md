@@ -50,3 +50,20 @@ Sources inspected 2026-10-01:
 - https://learn.microsoft.com/en-us/typography/opentype/spec/stat
 - `packages/creative/src/studio/render-fonts.json` and its 19 available font files;
   actual `fontkit` metadata retained in the scoped qualification archive.
+
+## Measured Crimson Pro native export correction — 2026-10-03
+
+Current source0dbed248 rejects the retained real Canva export of authorized
+acceptance design DAHW2D_0ypk: the sent family is Crimson Pro and Canva writes
+Crimson Pro Bold. Both exact titles survive and all five pictures, including the
+logo, pass current fidelity checks. The pinned `CrimsonPro-Bold.ttf` declares
+family `Crimson Pro`, style `Bold`, full name `Crimson Pro Bold`, PostScript name
+`CrimsonPro-Bold` in actual fc-scan metadata. This is a missing measured entry in
+the existing equivalence table, not an observed family substitution.
+
+Add only that verified full name. Preserve unknown suffix/width refusal, exact
+manual Client DNA membership, existing glyph/direction/weight limits and human
+approval. Retain the genuine checker regression and run the current checks on
+the original/native bytes again. This does not qualify a new upload, native
+edit/save/reexport, customer approval/download or public deployment. Evidence:
+`plans/hawzhin-app-integration-2026-10-02/CRIMSON_NATIVE_FONT_PROOF.json`.

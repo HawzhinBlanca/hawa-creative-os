@@ -80,6 +80,8 @@ const VERIFIED_FONT_NAMES: Readonly<Record<string, readonly string[]>> = {
   'vazirmatn': ['vazirmatn regular', 'vazirmatn bold'],
   // ADR-275: Inter's weighted files name their family by weight (name ID 1, fontkit 2026-10-02).
   'inter': ['inter regular', 'inter bold', 'inter medium', 'inter semibold', 'inter extrabold', 'inter black'],
+  // ADR209: pinned CrimsonPro-Bold.ttf declares family Crimson Pro, full name Crimson Pro Bold.
+  'crimson pro': ['crimson pro bold'],
 };
 
 function fontFamilyMatches(observed: string, expected: string, caseSensitive = false): boolean {

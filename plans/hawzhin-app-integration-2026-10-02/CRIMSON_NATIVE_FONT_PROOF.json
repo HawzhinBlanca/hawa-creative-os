@@ -1,0 +1,190 @@
+{
+  "date": "2026-10-03",
+  "status": "FONT_ALIAS_AND_NATIVE_TRANSFER_RECOVERY_LOCALLY_QUALIFIED_UNRELEASED",
+  "baseEngineCommit": "0dbed248",
+  "websiteCommitUnchanged": "863de26",
+  "requirements": [
+    "FR-028",
+    "FR-029",
+    "FR-034",
+    "FR-038",
+    "FR-041",
+    "NFR-018",
+    "NFR-024",
+    "NFR-025"
+  ],
+  "liveReadback": {
+    "buildCommit": "b56020bffa5f08a1e854d3c6329617144f7023c4",
+    "status": "healthy",
+    "canva": "connected",
+    "canvaCheckedAt": "2026-10-03T15:46:50.163Z",
+    "textLayoutCritiqueJudge": "gpt-6.1-sol",
+    "nativeAcceptanceDesignId": "DAHW2D_0ypk",
+    "nativeDesignUpdatedAt": 1790930702,
+    "liveTitlesPresent": 2,
+    "scope": "Read-only metadata/content and current health; no design changes or new upload"
+  },
+  "fontMeasurement": {
+    "path": "packages/creative/assets/fonts/CrimsonPro-Bold.ttf",
+    "sha256": "48f191e38355c8db100eb3ce157c20f9302a3b9a37b44a660f77ecfce3986609",
+    "method": "Actual local fc-scan --format family/style/fullname/postscriptname",
+    "family": "Crimson Pro",
+    "style": "Bold",
+    "fullName": "Crimson Pro Bold",
+    "postscriptName": "CrimsonPro-Bold",
+    "equivalence": "Only measured full-name alias added; no arbitrary suffix stripping or manual Client DNA expansion"
+  },
+  "actualNativeArtifactCheck": {
+    "sourceSha256": "72dd1bdb5d077864363b9c7f563ecb56b0a7b0ed2aa8664f03518ca2323cad50",
+    "nativeSha256": "a88a3a050f2e2149bc63a707a0a38dcac40653b25d32c975f87d3194d8e78478",
+    "before": {
+      "sourceCopy": true,
+      "sourceFont": true,
+      "nativeCopy": true,
+      "nativeFont": false
+    },
+    "after": {
+      "sourceCopy": true,
+      "sourceFont": true,
+      "nativeCopy": true,
+      "nativeFont": true,
+      "nativeRtlMetadata": true,
+      "picturesPass": true,
+      "matchedPictures": 5,
+      "logo": "preserved",
+      "fullReleasePass": false
+    },
+    "scope": "Current QA on retained actual authorized Canva/source bytes. Not a new native import/edit/save/reexport/customer approval or visual-font certification."
+  },
+  "fontRegressionRed": {
+    "passed": 32,
+    "failed": 1
+  },
+  "nativeHandoffRegressionRed": {
+    "passed": 2,
+    "failed": 3,
+    "skipped": 18,
+    "selection": "6d tests only",
+    "refusals": [
+      "CANVA_SETUP_REQUIRED",
+      "CANVA_TEMPORARILY_UNAVAILABLE",
+      "CANVA_RECONNECT_REQUIRED"
+    ]
+  },
+  "combinedFocused": {
+    "files": 7,
+    "passed": 163,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Actual isolated database orchestration and deterministic provider/Canva adapters; no paid network call",
+    "recoveryAssertions": [
+      "Retains transferring state on typed native refusal",
+      "Same plan ID, source SHA256 and bytes on dependency repair",
+      "Same import idempotency key",
+      "No additional model transport calls on resume",
+      "Unknown font suffix/width and exact manual membership remain refused"
+    ]
+  },
+  "build": "PASS",
+  "qaAndScriptsTypes": "PASS",
+  "strictTestsTypes": {
+    "activeRoots": 813,
+    "passedRoots": 813
+  },
+  "lint": {
+    "any": 979,
+    "ceiling": 1053,
+    "egressInventoryFiles": 9,
+    "passed": true
+  },
+  "sourceHashes": [
+    {
+      "path": "packages/qa/src/canva-pptx-check.ts",
+      "sha256": "071018ecc240d8572f7ac28e4f8a55ef2b50706a26841670f2b41193c9eedabe"
+    },
+    {
+      "path": "packages/qa/test/pptx-font-family-identity.test.ts",
+      "sha256": "f4520cf68b2bf4b0c2071b78f2834cecee46581bc56f90c462765815ade6fec2"
+    },
+    {
+      "path": "apps/core/src/services/design-studio/design-studio-service.ts",
+      "sha256": "d8b6766a6412d1010a78b56e5354e28bdf3c16c16187441ffe5e5977c0a6b724"
+    },
+    {
+      "path": "apps/core/test/design-studio-orchestrator.test.ts",
+      "sha256": "6e7f5f568a143daa3fc360d6400b38049e71e3e131df69eafa9d879d90f42147"
+    },
+    {
+      "path": "adrs/209_captured_font_family_identity.md",
+      "sha256": "408c2be867dca92a2589fcde742c46379409de89985760ce3e79f3db3a08bf29"
+    },
+    {
+      "path": "adrs/293_resume_saved_studio_native_handoff.md",
+      "sha256": "eb8db915a22234ab3b12ad1360c64d9640ea34751f67f42cffbd946c371b48a0"
+    }
+  ],
+  "reportHashes": [
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/retained-export-check.json",
+      "sha256": "7de9e666d732cac1db227016f30c89d8e04273370388829c9145797904f37e8d"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/retained-export-check-after.json",
+      "sha256": "0fd622e38c8fd00ad24f301718feba090c5429c5919bbbbea7e0350142f61d38"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/font-red.log",
+      "sha256": "6a9c4c87b9394699bbb32e342a6860c3f2ca9523775b58902b59ac6bda42886e"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/font-focused.log",
+      "sha256": "0a22a638e2325cce780123e280df2f40371db722743eca6dff0fc61efd36a1be"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/core-focused.log",
+      "sha256": "8c41dcbfc3053fbc842f0f4bd9b8e4cfca36e4f4510ea632fff748e86a9f4146"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/transfer-red.log",
+      "sha256": "1860a9405b5c91f22a2f20287f797acb53b0eccba45479739cbdfef7382aed9b"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/combined-build.log",
+      "sha256": "6c7b133b8155ed49292503a4308898d660ef70f20304c80c6f0c19591b9d65f1"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/combined-focused.log",
+      "sha256": "ea25c37fef3716a634eca5dc8b5cb2a0de572e5e7a202d2b59ba65030c0ab25e"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/types.log",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/scripts-types.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/tests-types.log",
+      "sha256": "55c8f3a0ed1da114f3434728ca6441477f8efcfa38dcef507ebdbb1a79256ea7"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/ratchet.log",
+      "sha256": "83ebcfc75a40b6bf9ae270bb37f130ca445f38f477c2ff18bb5f14465a7797b6"
+    },
+    {
+      "path": "output/qualification/2026-10-03/current-native-customer-compatibility/egress.log",
+      "sha256": "eac089a71ebb41d562566b634200a2191da2ff62c300226d182c8b2cfe3c374a"
+    }
+  ],
+  "fullRegression": "Previous combined source had9106pass/1 stale-dist failure/67skip; current UI rebuild resolved focused7. Not rerun on this changed source. Full release qualification remains scoped/open.",
+  "noPaidProviderCalls": true,
+  "noProductionDesignOrDeploymentWrite": true,
+  "wholeProductAdmission": false,
+  "remaining": [
+    "Actual new six-photo native Canva preview/revise/approve/download and native edit/save/reexport",
+    "Real-client visual quality and Sorani/Arabic human reading",
+    "Hosted customer/other apps/TLS/CI/coverage/recovery/cutover gates",
+    "Specific new-file browser Canva upload authorization and hosting choice remain pending"
+  ]
+}
