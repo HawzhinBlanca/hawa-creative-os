@@ -3,7 +3,7 @@
   "package": "hawa-creative-os-blueprint",
   "specificationVersion": "1.0.0",
   "researchFreeze": "2026-09-03",
-  "generatedAt": "2026-10-03T10:35:33Z",
+  "generatedAt": "2026-10-03T11:14:26Z",
   "hashAlgorithm": "SHA-256",
   "exclusions": [
     "MANIFEST.json (self-reference)",
@@ -4169,8 +4169,8 @@
     },
     {
       "path": "scripts/lint_provider_egress.ts",
-      "sha256": "b5f01df5d73182133bb4eaca4afdf030fd05f20ee608e72a23afd56aa8084830",
-      "bytes": 3773
+      "sha256": "68c1dbb2c4a4fa1698f5c61c1b369b995b27a7a92696935ff1b1af7ab99ffacc",
+      "bytes": 6996
     },
     {
       "path": "scripts/live_canary.ts",
@@ -4554,8 +4554,8 @@
     },
     {
       "path": "scripts/test/lint-provider-egress.test.ts",
-      "sha256": "56f1cb9f80459559e2bba7fe70c8a123076b5ebe9b5f9e24559e6a2b2ae63401",
-      "bytes": 1910
+      "sha256": "08c355843989f1972068a23bc2853a5541be62e554583a4065b943b3c248c25f",
+      "bytes": 3293
     },
     {
       "path": "scripts/test/live-canary.test.ts",

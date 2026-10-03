@@ -485,6 +485,10 @@ export function classifyWithHeuristics(
  * reply. A reply was always a change request, so "thanks" in reply to a draft started a paid
  * redesign; with no recent design, keyword rules decided, and "from now on, always use navy"
  * became a new brief with that sentence as its copy.
+ *
+ * ADR-289: this paid reading writes no ledger row and has no production caller (lifecycle intake reads
+ * messages through requester-intent-model.ts `readOnce`). scripts/lint_provider_egress.ts refuses a
+ * new caller until the call is admitted through that ledger.
  */
 export async function classifyInboundTelegramMessage(
   input: {
